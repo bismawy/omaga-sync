@@ -414,7 +414,7 @@ Panel {
 
             Text {
               width: parent.width
-              text: qsTr("Atau manual: mega-login email-anda")
+              text: qsTr("Atau manual di terminal: mega-cmd, lalu ketik: login email-anda")
               color: Qt.darker(root.foreground, 1.9)
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption

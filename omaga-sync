@@ -328,14 +328,16 @@ def cmd_open(path):
 
 
 def cmd_login(email=""):
-    # MEGAcmd has no browser/OAuth flow; the friendliest path is a terminal
-    # pre-filled with `mega-login <email>` so only password + 2FA are typed.
+    # The standalone `mega-login` client is non-interactive (it demands every
+    # argument), so open the interactive `mega-cmd` shell instead with the
+    # `login <email>` line pre-fed; the password and 2FA prompts read the
+    # terminal directly and stay hidden while typing.
     import shlex
     script = (
-        "mega-login " + (shlex.quote(email) if email else "") + "; "
-        "if [ $? -eq 0 ]; then echo; echo 'Login berhasil — panel Omaga Sync akan memperbarui otomatis.'; "
-        "else echo; echo 'Login dibatalkan/gagal.'; fi; "
-        "echo; echo 'Tekan Enter untuk menutup...'; read _"
+        "printf '\\n== Omaga Sync ==\\n"
+        "Login ke MEGA: ketik password lalu kode 2FA saat diminta (input tersembunyi).\\n"
+        "Setelah berhasil, ketik quit atau tutup jendela ini.\\n\\n'; "
+        "( printf 'login " + (shlex.quote(email) if email else "") + "\\n'; cat ) | mega-cmd"
     )
     try:
         subprocess.Popen(
