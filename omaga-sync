@@ -375,6 +375,20 @@ def cmd_add(remote_name, local_base="MEGA"):
     return rc
 
 
+def cmd_remove(path):
+    """Remove a sync pair (files stay untouched on both sides)."""
+    local = str(path or "").strip()
+    if not local:
+        log("path folder lokal diperlukan")
+        return 1
+    if not ensure_engine():
+        return 1
+    rc, _, err = sh(["mega-sync", "--delete", local], timeout=15)
+    if rc != 0:
+        log(f"gagal menghapus sync: {err.strip()}")
+    return rc
+
+
 def cmd_open(path):
     if not path or not Path(path).expanduser().is_dir():
         log(f"folder tidak ditemukan: {path}")
@@ -416,6 +430,8 @@ def main():
     elif args[0] == "add":
         return cmd_add(args[1] if len(args) > 1 else "",
                        args[2] if len(args) > 2 else "MEGA")
+    elif args[0] == "remove":
+        return cmd_remove(args[1] if len(args) > 1 else "")
     elif args[0] == "open":
         return cmd_open(args[1] if len(args) > 1 else "")
     elif args[0] == "once":  # one poll — for smoke testing

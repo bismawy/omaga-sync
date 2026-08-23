@@ -592,6 +592,16 @@ Panel {
                     onClicked: root.runCtl(pairRow.pairPaused ? "resume" : "pause",
                                            pairRow.modelData ? pairRow.modelData.local : "")
                   }
+
+                  IconButton {
+                    iconName: "trash-2"
+                    tooltipText: qsTr("Hapus sync ini (file tetap aman)")
+                    foreground: root.foreground
+                    iconSize: Style.font.body
+                    Layout.alignment: Qt.AlignVCenter
+                    onClicked: root.runCtlArgs(["remove",
+                                               pairRow.modelData ? pairRow.modelData.local : ""])
+                  }
                 }
 
                 MouseArea {
@@ -738,8 +748,26 @@ Panel {
               wrapMode: Text.WordWrap
             }
 
-            Repeater {
-              model: root.remoteFolders
+            // Folder list capped at ~4 rows with internal scrolling so the
+            // popup height stays stable no matter how many folders exist.
+            Flickable {
+              width: parent.width
+              height: Math.min(pickColumn.implicitHeight, Style.space(216))
+              contentWidth: width
+              contentHeight: pickColumn.implicitHeight
+              clip: true
+              boundsBehavior: Flickable.StopAtBounds
+              flickableDirection: Flickable.VerticalFlick
+              interactive: contentHeight > height
+              ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+              Column {
+                id: pickColumn
+                width: parent.width
+                spacing: Style.space(4)
+
+                Repeater {
+                  model: root.remoteFolders
 
               Rectangle {
                 id: pickRow
@@ -822,8 +850,10 @@ Panel {
                   text: qsTr("Sinkronkan isi folder ini")
                   fontFamily: root.fontFamily
                 }
+                }
               }
             }
+          }
           }
 
           Text {
