@@ -216,10 +216,14 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(400))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight)
+    // childrenRect (actual laid-out height) rather than implicitHeight:
+    // mixed implicit/explicit child sizing can leave the positioner's
+    // implicitHeight at 0 while the real content height is not.
+    contentHeight: panel.fittedContentHeight(Math.max(column.childrenRect.height, column.implicitHeight))
 
     PanelKeyCatcher {
       id: keyCatcher
+      anchors.fill: parent
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
@@ -227,11 +231,11 @@ Panel {
         else if (t === "r" || t === "R") root.refresh()
       }
 
-      Flickable {
-        id: panelFlick
-        anchors.fill: parent
-        contentWidth: width
-        contentHeight: column.implicitHeight
+        Flickable {
+          id: panelFlick
+          anchors.fill: parent
+          contentWidth: width
+          contentHeight: Math.max(column.childrenRect.height, column.implicitHeight)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         flickableDirection: Flickable.VerticalFlick
