@@ -36,7 +36,8 @@ Panel {
   readonly property bool hasError: syncState === "error"
   readonly property bool needsAuth: syncState === "auth"
   readonly property bool isBusy: syncState === "syncing" || syncState === "starting"
-  readonly property bool unhealthy: hasError || needsAuth || syncState === "offline"
+  // Red is reserved for genuine breakage; "needs login" stays neutral white.
+  readonly property bool broken: hasError || syncState === "offline"
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgentColor: bar ? bar.urgent : Color.urgent
@@ -60,7 +61,7 @@ Panel {
     if (status && status.updatedTs) parts.push(Qt.formatDateTime(new Date(status.updatedTs * 1000), "HH:mm"))
     return parts.join(" · ")
   }
-  readonly property color heroColor: unhealthy ? urgentColor : (allPaused || syncState === "offline" ? dim : foreground)
+  readonly property color heroColor: broken ? urgentColor : (allPaused ? dim : foreground)
 
   function parseStatusText(raw) {
     try {
@@ -91,12 +92,6 @@ Panel {
     var folder = String(path || "")
     if (folder === "") return
     Quickshell.execDetached([ctlBin, "open", folder])
-  }
-
-  function copyToClipboard(value) {
-    var text = String(value || "")
-    if (text === "") return
-    Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(text) + " | wl-copy"])
   }
 
   function formatBytes(bytes) {
@@ -187,7 +182,7 @@ Panel {
         Text {
           anchors.centerIn: parent
           text: "\uE33D"
-          color: root.unhealthy ? root.urgentColor : root.foreground
+          color: root.broken ? root.urgentColor : root.foreground
           opacity: root.allPaused || root.syncState === "offline" ? 0.55 : 1.0
           font.family: root.fontFamily
           font.pixelSize: Style.font.icon
@@ -224,6 +219,7 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      blocked: emailField.activeFocus
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
@@ -254,7 +250,7 @@ Panel {
               : root.metaLabel
             foreground: root.foreground
             fontFamily: root.fontFamily
-            iconOpacity: root.unhealthy ? 1.0 : (root.allPaused ? 0.5 : 1.0)
+            iconOpacity: root.broken ? 1.0 : (root.allPaused ? 0.5 : 1.0)
             iconComponent: Component {
               Text {
                 text: "\uE33D"
@@ -282,8 +278,37 @@ Panel {
             }
           }
 
+          // Visible equivalents of the bar-icon right/middle clicks, so the
+          // panel works stand-alone without knowing the mouse shortcuts.
+          Item {
+            width: parent.width
+            height: actionRow.implicitHeight
+
+            Row {
+              id: actionRow
+              anchors.right: parent.right
+              spacing: Style.space(4)
+
+              PanelActionButton {
+                iconText: root.allPaused ? "\uF040A" : "\uF03E4"
+                tooltipText: root.allPaused ? qsTr("Lanjutkan semua sinkronisasi") : qsTr("Jeda semua sinkronisasi")
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: root.togglePause()
+              }
+
+              PanelActionButton {
+                iconText: "\uF0432"
+                tooltipText: qsTr("Muat ulang status")
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: root.refresh()
+              }
+            }
+          }
+
           Text {
-            visible: root.hasError || root.syncState === "offline"
+            visible: root.broken
             width: parent.width
             text: root.syncState === "offline"
               ? qsTr("Mesin MEGAcmd tidak merespons. Periksa: journalctl --user -u omaga-sync-engine")
@@ -294,8 +319,9 @@ Panel {
             wrapMode: Text.WordWrap
           }
 
-          // Login onboarding: the session is created interactively in a
-          // terminal (2FA prompt included), never through the panel.
+          // Login onboarding: MEGAcmd has no browser/OAuth flow, so the
+          // button opens the default terminal with `mega-login <email>`
+          // pre-filled; only the password and 2FA code are typed there.
           Column {
             visible: root.needsAuth
             width: parent.width
@@ -303,7 +329,7 @@ Panel {
 
             Text {
               width: parent.width
-              text: qsTr("Sesi MEGA belum ada. Jalankan di terminal, lalu tunggu beberapa detik:")
+              text: qsTr("Sesi MEGA belum ada. Masukkan email, klik Login, lalu isi password dan kode 2FA di terminal yang terbuka:")
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
@@ -314,22 +340,88 @@ Panel {
               width: parent.width
               spacing: Style.space(8)
 
-              Text {
+              TextField {
+                id: emailField
                 Layout.fillWidth: true
-                text: "mega-login email-anda"
-                color: root.foreground
+                placeholderText: qsTr("email MEGA Anda")
+                foreground: root.foreground
                 font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-                elide: Text.ElideMiddle
+                inputMethodHints: Qt.ImhEmailCharactersOnly
+                onAccepted: root.runCtl("login", text)
+                Keys.onPressed: function(event) {
+                  if (event.key === Qt.Key_Escape) {
+                    keyCatcher.forceActiveFocus()
+                    event.accepted = true
+                  }
+                }
+                onActiveFocusChanged: if (!activeFocus) keyCatcher.forceActiveFocus()
+              }
+            }
+
+            Rectangle {
+              id: loginRow
+              width: parent.width
+              height: loginInner.implicitHeight + Style.space(10)
+              radius: Style.cornerRadius
+              color: loginMouse.containsMouse
+                ? Style.hoverFillFor(root.foreground, Color.accent)
+                : "transparent"
+
+              RowLayout {
+                id: loginInner
+                anchors.fill: parent
+                anchors.leftMargin: Style.space(8)
+                anchors.rightMargin: Style.space(8)
+                spacing: Style.space(10)
+
+                Text {
+                  text: "\uF040A"
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.heading
+                  Layout.alignment: Qt.AlignVCenter
+                }
+
+                ColumnLayout {
+                  Layout.fillWidth: true
+                  spacing: Style.space(1)
+
+                  Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Login MEGA")
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.body
+                    font.bold: true
+                  }
+
+                  Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Buka terminal — tinggal ketik password dan kode 2FA")
+                    color: root.dim
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideRight
+                  }
+                }
               }
 
-              PanelActionButton {
-                iconText: "\uF018F"
-                tooltipText: qsTr("Salin perintah")
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                onClicked: root.copyToClipboard("mega-login email-anda")
+              MouseArea {
+                id: loginMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.runCtl("login", emailField.text)
               }
+            }
+
+            Text {
+              width: parent.width
+              text: qsTr("Atau manual: mega-login email-anda")
+              color: Qt.darker(root.foreground, 1.9)
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WordWrap
             }
           }
 

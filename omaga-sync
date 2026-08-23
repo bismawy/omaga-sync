@@ -11,6 +11,7 @@ Subcommands:
   pause [path]     pause one sync pair, or all when no path is given
   resume [path]    resume one sync pair, or all when no path is given
   repair           kill an unsupervised server and restart it under systemd
+  login [email]    open a terminal with the interactive mega-login prompt
   open <path>      open a local folder with xdg-open
 
 States written to status.json:
@@ -326,6 +327,27 @@ def cmd_open(path):
     return sh(["xdg-open", str(Path(path).expanduser())])[0]
 
 
+def cmd_login(email=""):
+    # MEGAcmd has no browser/OAuth flow; the friendliest path is a terminal
+    # pre-filled with `mega-login <email>` so only password + 2FA are typed.
+    import shlex
+    script = (
+        "mega-login " + (shlex.quote(email) if email else "") + "; "
+        "if [ $? -eq 0 ]; then echo; echo 'Login berhasil — panel Omaga Sync akan memperbarui otomatis.'; "
+        "else echo; echo 'Login dibatalkan/gagal.'; fi; "
+        "echo; echo 'Tekan Enter untuk menutup...'; read _"
+    )
+    try:
+        subprocess.Popen(
+            ["omarchy-launch-terminal", "bash", "-c", script],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True)
+        return 0
+    except FileNotFoundError as exc:
+        log(f"tidak bisa membuka terminal: {exc}")
+        return 127
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0] == "monitor":
@@ -338,6 +360,8 @@ def main():
         return cmd_resume(args[1] if len(args) > 1 else "")
     elif args[0] == "repair":
         return cmd_repair()
+    elif args[0] == "login":
+        return cmd_login(args[1] if len(args) > 1 else "")
     elif args[0] == "open":
         return cmd_open(args[1] if len(args) > 1 else "")
     elif args[0] == "once":  # one poll — for smoke testing
