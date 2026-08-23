@@ -17,6 +17,7 @@ mkdir -p "$PLUGIN_DST" "$HOME/.local/bin" "$UNIT_DST" "$HOME/.local/state/omaga-
 # The plugin loader rejects symlinks, so always copy.
 install -m 644 "$SRC_DIR/manifest.json" "$PLUGIN_DST/manifest.json"
 install -m 644 "$SRC_DIR/Panel.qml" "$PLUGIN_DST/Panel.qml"
+install -m 644 "$SRC_DIR/CloudIcon.qml" "$PLUGIN_DST/CloudIcon.qml"
 
 if [[ $plugin_only -eq 1 ]]; then
   omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true

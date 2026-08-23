@@ -179,13 +179,11 @@ Panel {
     bar: root.bar
     iconComponent: Component {
       Item {
-        Text {
+        CloudIcon {
           anchors.centerIn: parent
-          text: "\uE33D"
+          iconSize: Style.space(11)
           color: root.broken ? root.urgentColor : root.foreground
           opacity: root.allPaused || root.syncState === "offline" ? 0.55 : 1.0
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.icon
 
           SequentialAnimation on opacity {
             running: root.isBusy
@@ -252,11 +250,9 @@ Panel {
             fontFamily: root.fontFamily
             iconOpacity: root.broken ? 1.0 : (root.allPaused ? 0.5 : 1.0)
             iconComponent: Component {
-              Text {
-                text: "\uE33D"
+              CloudIcon {
+                iconSize: Style.font.display
                 color: root.heroColor
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.display
               }
             }
             trailingControl: Component {
