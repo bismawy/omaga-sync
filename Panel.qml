@@ -179,9 +179,10 @@ Panel {
     bar: root.bar
     iconComponent: Component {
       Item {
-        CloudIcon {
+        LucideIcon {
           anchors.centerIn: parent
-          iconSize: Style.space(11)
+          name: "folder-sync"
+          iconSize: Style.bar.iconCanvas
           color: root.broken ? root.urgentColor : root.foreground
           opacity: root.allPaused || root.syncState === "offline" ? 0.55 : 1.0
 
@@ -250,7 +251,8 @@ Panel {
             fontFamily: root.fontFamily
             iconOpacity: root.broken ? 1.0 : (root.allPaused ? 0.5 : 1.0)
             iconComponent: Component {
-              CloudIcon {
+              LucideIcon {
+                name: "folder-sync"
                 iconSize: Style.font.display
                 color: root.heroColor
               }
@@ -285,19 +287,19 @@ Panel {
               anchors.right: parent.right
               spacing: Style.space(4)
 
-              PanelActionButton {
-                iconText: root.allPaused ? "\uF040A" : "\uF03E4"
+              IconButton {
+                iconName: root.allPaused ? "play" : "pause"
                 tooltipText: root.allPaused ? qsTr("Lanjutkan semua sinkronisasi") : qsTr("Jeda semua sinkronisasi")
                 foreground: root.foreground
-                fontFamily: root.fontFamily
+                iconSize: Style.font.body
                 onClicked: root.togglePause()
               }
 
-              PanelActionButton {
-                iconText: "\uF0432"
+              IconButton {
+                iconName: "rotate-cw"
                 tooltipText: qsTr("Muat ulang status")
                 foreground: root.foreground
-                fontFamily: root.fontFamily
+                iconSize: Style.font.body
                 onClicked: root.refresh()
               }
             }
@@ -370,13 +372,12 @@ Panel {
                 anchors.rightMargin: Style.space(8)
                 spacing: Style.space(10)
 
-                Text {
-                  text: "\uF040A"
-                  color: root.foreground
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.heading
-                  Layout.alignment: Qt.AlignVCenter
-                }
+                LucideIcon {
+                Layout.alignment: Qt.AlignVCenter
+                name: "log-in"
+                iconSize: Style.font.heading
+                color: root.foreground
+              }
 
                 ColumnLayout {
                   Layout.fillWidth: true
@@ -522,12 +523,11 @@ Panel {
                   anchors.rightMargin: Style.space(8)
                   spacing: Style.space(8)
 
-                  Text {
-                    text: "\uF0209"
+                  LucideIcon {
+                    name: "folder"
+                    iconSize: Style.font.body
                     color: pairRow.pairFailed ? root.urgentColor
                       : pairRow.pairPaused ? Qt.darker(root.dim, 1.3) : root.dim
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.body
                     Layout.alignment: Qt.AlignVCenter
                   }
 
@@ -559,11 +559,11 @@ Panel {
                     }
                   }
 
-                  PanelActionButton {
-                    iconText: pairRow.pairPaused ? "\uF040A" : "\uF03E4"
+                  IconButton {
+                    iconName: pairRow.pairPaused ? "play" : "pause"
                     tooltipText: pairRow.pairPaused ? qsTr("Lanjutkan folder ini") : qsTr("Jeda folder ini")
                     foreground: root.foreground
-                    fontFamily: root.fontFamily
+                    iconSize: Style.font.body
                     Layout.alignment: Qt.AlignVCenter
                     onClicked: root.runCtl(pairRow.pairPaused ? "resume" : "pause",
                                            pairRow.modelData ? pairRow.modelData.local : "")
