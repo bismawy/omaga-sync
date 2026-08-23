@@ -32,7 +32,7 @@ Panel {
   readonly property real totalBytes: status ? Number(status.totalBytes || 0) : 0
   readonly property real quotaFraction: totalBytes > 0 ? Math.min(1, usedBytes / totalBytes) : 0
 
-  readonly property bool enginePaused: syncState === "paused"
+  readonly property bool allPaused: syncState === "paused"
   readonly property bool hasError: syncState === "error"
   readonly property bool needsAuth: syncState === "auth"
   readonly property bool isBusy: syncState === "syncing" || syncState === "starting"
@@ -60,7 +60,7 @@ Panel {
     if (status && status.updatedTs) parts.push(Qt.formatDateTime(new Date(status.updatedTs * 1000), "HH:mm"))
     return parts.join(" · ")
   }
-  readonly property color heroColor: unhealthy ? urgentColor : (enginePaused || state === "offline" ? dim : foreground)
+  readonly property color heroColor: unhealthy ? urgentColor : (allPaused || syncState === "offline" ? dim : foreground)
 
   function parseStatusText(raw) {
     try {
@@ -75,14 +75,16 @@ Panel {
     if (statusFile.path !== "") statusFile.reload()
   }
 
-  function runCtl(sub) {
+  function runCtl(sub, path) {
     if (actionProcess.running) return
-    actionProcess.command = [ctlBin, sub]
+    actionProcess.command = path !== undefined && path !== ""
+      ? [ctlBin, sub, path]
+      : [ctlBin, sub]
     actionProcess.running = true
   }
 
   function togglePause() {
-    runCtl(enginePaused ? "resume" : "pause")
+    runCtl(allPaused ? "resume" : "pause")
   }
 
   function openFolder(path) {
@@ -107,11 +109,13 @@ Panel {
   }
 
   function pairStateLabel(raw) {
-    var s = String(raw || "").toUpperCase()
-    if (s.indexOf("FAIL") !== -1 || s.indexOf("ERROR") !== -1) return qsTr("gagal")
-    if (s.indexOf("PAUSE") !== -1) return qsTr("dijeda")
-    if (s === "SYNCED" || s === "") return qsTr("tersinkron")
-    return s.toLowerCase()
+    switch (String(raw || "")) {
+      case "error": return qsTr("gagal")
+      case "paused": return qsTr("dijeda")
+      case "syncing": return qsTr("menyinkronkan")
+      case "synced": return qsTr("tersinkron")
+      default: return qsTr("memeriksa")
+    }
   }
 
   function switchPanel(direction) {
@@ -184,7 +188,7 @@ Panel {
           anchors.centerIn: parent
           text: "\uE33D"
           color: root.unhealthy ? root.urgentColor : root.foreground
-          opacity: root.enginePaused || root.syncState === "offline" ? 0.55 : 1.0
+          opacity: root.allPaused || root.syncState === "offline" ? 0.55 : 1.0
           font.family: root.fontFamily
           font.pixelSize: Style.font.icon
 
@@ -246,7 +250,7 @@ Panel {
               : root.metaLabel
             foreground: root.foreground
             fontFamily: root.fontFamily
-            iconOpacity: root.unhealthy ? 1.0 : (root.enginePaused ? 0.5 : 1.0)
+            iconOpacity: root.unhealthy ? 1.0 : (root.allPaused ? 0.5 : 1.0)
             iconComponent: Component {
               Text {
                 text: "\uE33D"
@@ -258,7 +262,7 @@ Panel {
             trailingControl: Component {
               ToggleSwitch {
                 id: pauseSwitch
-                checked: !root.enginePaused
+                checked: !root.allPaused
                 busy: false
                 hasCursor: false
                 foreground: hero.foreground
@@ -267,7 +271,7 @@ Panel {
 
                 PanelToolTip {
                   visible: pauseSwitch.containsMouse
-                  text: root.enginePaused ? qsTr("Lanjutkan sinkronisasi") : qsTr("Jeda sinkronisasi")
+                  text: root.allPaused ? qsTr("Lanjutkan semua sinkronisasi") : qsTr("Jeda semua sinkronisasi")
                   fontFamily: hero.fontFamily
                 }
               }
@@ -404,6 +408,9 @@ Panel {
               Rectangle {
                 id: pairRow
                 required property var modelData
+                readonly property string pairState: modelData ? String(modelData.state || "") : ""
+                readonly property bool pairPaused: pairState === "paused"
+                readonly property bool pairFailed: pairState === "error"
 
                 width: parent.width
                 height: pairInner.implicitHeight + Style.space(8)
@@ -421,8 +428,8 @@ Panel {
 
                   Text {
                     text: "\uF0209"
-                    color: pairRow.modelData && String(pairRow.modelData.state || "").toUpperCase().indexOf("FAIL") !== -1
-                      ? root.urgentColor : root.dim
+                    color: pairRow.pairFailed ? root.urgentColor
+                      : pairRow.pairPaused ? Qt.darker(root.dim, 1.3) : root.dim
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.body
                     Layout.alignment: Qt.AlignVCenter
@@ -444,12 +451,26 @@ Panel {
                     Text {
                       Layout.fillWidth: true
                       visible: text !== ""
-                      text: pairRow.modelData ? root.pairStateLabel(pairRow.modelData.state) : ""
-                      color: root.dim
+                      text: {
+                        if (!pairRow.modelData) return ""
+                        var detail = pairRow.modelData.error || ""
+                        return detail !== "" ? detail : root.pairStateLabel(pairRow.pairState)
+                      }
+                      color: pairRow.pairFailed ? root.urgentColor : root.dim
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.caption
                       elide: Text.ElideRight
                     }
+                  }
+
+                  PanelActionButton {
+                    iconText: pairRow.pairPaused ? "\uF040A" : "\uF03E4"
+                    tooltipText: pairRow.pairPaused ? qsTr("Lanjutkan folder ini") : qsTr("Jeda folder ini")
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    Layout.alignment: Qt.AlignVCenter
+                    onClicked: root.runCtl(pairRow.pairPaused ? "resume" : "pause",
+                                           pairRow.modelData ? pairRow.modelData.local : "")
                   }
                 }
 

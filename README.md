@@ -17,9 +17,9 @@ Widget bar (bisma.omaga-sync) ── baca status.json, tombol jeda/lanjut/buka f
 
 - Ikon cloud di bar: normal / berdenyut saat sync / merah saat error / redup saat jeda
 - Klik: panel detail (akun, kuota, daftar folder + statusnya)
-- Jeda/lanjutkan sync (klik kanan ikon atau saklar di panel)
+- Jeda/lanjutkan per folder, atau semuanya sekaligus (klik kanan ikon / saklar di panel)
 - Klik baris folder: buka foldernya
-- Notifikasi desktop **hanya saat error** (login kedaluwarsa, sync gagal, server mati) — tanpa spam
+- Notifikasi desktop **hanya saat error** (login kedaluwarsa, sync gagal, server bermasalah) — tanpa spam
 
 ## Instalasi
 
@@ -40,7 +40,8 @@ mega-sync ~/Sync /Sync        # pasangan folder lokal ↔ folder MEGA
 | Perintah | Efek |
 |---|---|
 | `omaga-sync status` | status terakhir (JSON) |
-| `omaga-sync pause` / `resume` | jeda / lanjutkan seluruh sync |
+| `omaga-sync pause [folder]` / `resume [folder]` | jeda / lanjutkan satu folder, atau semua jika tanpa argumen |
+| `omaga-sync repair` | kembalikan server ke pengawasan systemd (jika ada server liar) |
 | `omaga-sync open <folder>` | buka folder sync |
 | `journalctl --user -u omaga-sync-engine` | log mesin MEGA |
 

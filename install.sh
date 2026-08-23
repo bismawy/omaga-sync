@@ -33,6 +33,11 @@ install -m 755 "$SRC_DIR/omaga-sync" "$BIN_DST"
 install -m 644 "$SRC_DIR/omaga-sync-engine.service" "$UNIT_DST/"
 install -m 644 "$SRC_DIR/omaga-sync-monitor.service" "$UNIT_DST/"
 
+# Any mega-* call may have auto-spawned an unsupervised server; it would
+# keep the socket so the systemd unit can never bind. Kill it first.
+pkill -u "$USER" -x mega-cmd-server >/dev/null 2>&1 || true
+sleep 1
+
 systemctl --user daemon-reload
 systemctl --user enable --now omaga-sync-engine.service
 systemctl --user enable --now omaga-sync-monitor.service
@@ -48,7 +53,7 @@ else
   echo "Terpasang; monitor sedang menyala, status file menyusul."
 fi
 
-if ! mega-whoami >/dev/null 2>&1; then
+if systemctl --user is-active --quiet omaga-sync-engine.service && ! mega-whoami >/dev/null 2>&1; then
   cat <<'EOF'
 
 Langkah berikutnya (sekali saja, di terminal — termasuk prompt 2FA):
