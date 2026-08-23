@@ -25,27 +25,26 @@ Panel {
   property var status: null
   property string statusError: ""
 
-  readonly property string state: status ? String(status.state || "") : ""
+  readonly property string syncState: status ? String(status.state || "") : ""
   readonly property var pairs: status && status.pairs instanceof Array ? status.pairs : []
   readonly property string email: status ? String(status.email || "") : ""
   readonly property real usedBytes: status ? Number(status.usedBytes || 0) : 0
   readonly property real totalBytes: status ? Number(status.totalBytes || 0) : 0
   readonly property real quotaFraction: totalBytes > 0 ? Math.min(1, usedBytes / totalBytes) : 0
 
-  readonly property bool enginePaused: state === "paused"
-  readonly property bool hasError: state === "error"
-  readonly property bool needsAuth: state === "auth"
-  readonly property bool isBusy: state === "syncing" || state === "starting"
-  readonly property bool unhealthy: hasError || needsAuth || state === "offline"
+  readonly property bool enginePaused: syncState === "paused"
+  readonly property bool hasError: syncState === "error"
+  readonly property bool needsAuth: syncState === "auth"
+  readonly property bool isBusy: syncState === "syncing" || syncState === "starting"
+  readonly property bool unhealthy: hasError || needsAuth || syncState === "offline"
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgentColor: bar ? bar.urgent : Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
-  readonly property color barForeground: foreground
 
   readonly property string stateLabel: {
-    switch (state) {
+    switch (syncState) {
       case "synced": return qsTr("Tersinkron")
       case "syncing": return qsTr("Sinkronisasi…")
       case "starting": return qsTr("Menyambung…")
@@ -172,7 +171,7 @@ Panel {
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
     function refresh(): string { root.refresh(); return "ok" }
-    function status(): string { return root.state }
+    function status(): string { return root.syncState }
   }
 
   BarIconButton {
@@ -185,7 +184,7 @@ Panel {
           anchors.centerIn: parent
           text: "\uE33D"
           color: root.unhealthy ? root.urgentColor : root.foreground
-          opacity: root.enginePaused || root.state === "offline" ? 0.55 : 1.0
+          opacity: root.enginePaused || root.syncState === "offline" ? 0.55 : 1.0
           font.family: root.fontFamily
           font.pixelSize: Style.font.icon
 
@@ -276,9 +275,9 @@ Panel {
           }
 
           Text {
-            visible: root.hasError || root.state === "offline"
+            visible: root.hasError || root.syncState === "offline"
             width: parent.width
-            text: root.state === "offline"
+            text: root.syncState === "offline"
               ? qsTr("Mesin MEGAcmd tidak merespons. Periksa: journalctl --user -u omaga-sync-engine")
               : qsTr("Ada folder yang gagal disinkronkan. Periksa panel di bawah.")
             color: root.urgentColor
@@ -374,12 +373,12 @@ Panel {
           }
 
           PanelSeparator {
-            visible: root.pairs.length > 0 || root.state === "synced"
+            visible: root.pairs.length > 0 || root.syncState === "synced"
             foreground: root.foreground
           }
 
           Column {
-            visible: root.pairs.length > 0 || root.state === "synced"
+            visible: root.pairs.length > 0 || root.syncState === "synced"
             width: parent.width
             spacing: Style.space(8)
 

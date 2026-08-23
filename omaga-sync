@@ -95,6 +95,10 @@ def parse_pairs(out):
             continue
         if "|" in line:
             cells = [c.strip() for c in line.split("|")]
+            while cells and cells[0] == "":
+                cells.pop(0)
+            while cells and cells[-1] == "":
+                cells.pop()
         else:
             cells = line.split()
         if len(cells) < 3:
