@@ -243,7 +243,10 @@ class Monitor:
         try:
             json.dump(status, tmp, ensure_ascii=False)
             tmp.close()
-            STATUS_PATH.replace(tmp.name)  # atomic on the same filesystem
+            Path(tmp.name).replace(STATUS_PATH)  # atomic on the same filesystem
+        except BaseException:
+            Path(tmp.name).unlink(missing_ok=True)
+            raise
         finally:
             if not tmp.closed:
                 tmp.close()

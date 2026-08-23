@@ -335,10 +335,13 @@ Panel {
             width: parent.width
             spacing: Style.space(6)
 
-            Row {
+            Item {
+              id: quotaHeader
               width: parent.width
+              height: Math.max(quotaLabel.implicitHeight, quotaValue.implicitHeight)
 
               Text {
+                id: quotaLabel
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 text: qsTr("PENGGUNAAN")
@@ -349,6 +352,7 @@ Panel {
               }
 
               Text {
+                id: quotaValue
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.formatBytes(root.usedBytes) + " / " + root.formatBytes(root.totalBytes)
