@@ -24,6 +24,7 @@ Panel {
 
   property var status: null
   property string statusError: ""
+  property bool addMode: false
 
   readonly property string syncState: status ? String(status.state || "") : ""
   readonly property var pairs: status && status.pairs instanceof Array ? status.pairs : []
@@ -127,12 +128,27 @@ Panel {
     return false
   }
 
+  // Pick state for a remote folder against the base folder field:
+  // "synced" (already paired), "taken" (base folder used by another pair),
+  // or "available".
+  function pickState(name) {
+    var base = root.home + "/" + localBaseField.text
+    for (var i = 0; i < root.pairs.length; i++) {
+      var pair = root.pairs[i]
+      if (String(pair.remote || "") === "/" + name) return "synced"
+      if (String(pair.local || "") === base) return "taken"
+    }
+    return "available"
+  }
+
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
   onOpenedChanged: if (opened) {
     refresh()
     Qt.callLater(function() { if (keyCatcher) keyCatcher.forceActiveFocus() })
+  } else {
+    addMode = false
   }
 
   FileView {
@@ -296,10 +312,10 @@ Panel {
               spacing: Style.space(4)
 
               IconButton {
-                iconName: root.allPaused ? "play" : "pause"
                 tooltipText: root.allPaused ? qsTr("Lanjutkan semua sinkronisasi") : qsTr("Jeda semua sinkronisasi")
                 foreground: root.foreground
                 iconSize: Style.font.body
+                iconComponent: root.allPaused ? playGlyph : pauseGlyph
                 onClicked: root.togglePause()
               }
 
@@ -498,7 +514,7 @@ Panel {
             }
 
             Text {
-              visible: root.pairs.length === 0
+              visible: root.pairs.length === 0 && !root.loggedIn
               width: parent.width
               text: qsTr("Belum ada folder sync. Tambahkan dengan:\nmega-sync ~/Sync /Sync")
               color: root.dim
@@ -568,10 +584,10 @@ Panel {
                   }
 
                   IconButton {
-                    iconName: pairRow.pairPaused ? "play" : "pause"
                     tooltipText: pairRow.pairPaused ? qsTr("Lanjutkan folder ini") : qsTr("Jeda folder ini")
                     foreground: root.foreground
                     iconSize: Style.font.body
+                    iconComponent: pairRow.pairPaused ? playGlyph : pauseGlyph
                     Layout.alignment: Qt.AlignVCenter
                     onClicked: root.runCtl(pairRow.pairPaused ? "resume" : "pause",
                                            pairRow.modelData ? pairRow.modelData.local : "")
@@ -595,25 +611,92 @@ Panel {
             }
           }
 
-          // Pick-to-sync: choose a MEGA folder, it lands in ~/MEGA/<name>
-          // (the same default the desktop app uses).
-          Column {
+          // Add-sync entry point — one clear action, like the desktop app's
+          // "Add sync" button. Expands into the remote folder picker.
+          Rectangle {
             visible: root.loggedIn
             width: parent.width
-            spacing: Style.space(8)
+            height: addLabelRow.implicitHeight + Style.space(10)
+            radius: Style.cornerRadius
+            color: addMouse.containsMouse
+              ? Style.hoverFillFor(root.foreground, Color.accent)
+              : "transparent"
 
-            PanelSectionHeader {
-              text: qsTr("FOLDER MEGA ANDA")
-              foreground: root.foreground
-              fontFamily: root.fontFamily
+            RowLayout {
+              id: addLabelRow
+              anchors.fill: parent
+              anchors.leftMargin: Style.space(8)
+              anchors.rightMargin: Style.space(8)
+              spacing: Style.space(10)
+
+              Item {
+                Layout.alignment: Qt.AlignVCenter
+                implicitWidth: plusIconSize
+                implicitHeight: plusIconSize
+                readonly property real plusIconSize: Style.font.heading
+
+                Rectangle {
+                  anchors.centerIn: parent
+                  width: parent.width * 0.62
+                  height: Math.max(2, parent.height * 0.1)
+                  radius: height / 2
+                  color: root.foreground
+                }
+                Rectangle {
+                  anchors.centerIn: parent
+                  width: Math.max(2, parent.width * 0.1)
+                  height: parent.height * 0.62
+                  radius: width / 2
+                  color: root.foreground
+                }
+              }
+
+              ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Style.space(1)
+
+                Text {
+                  Layout.fillWidth: true
+                  text: qsTr("Tambah sinkronisasi")
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  font.bold: true
+                }
+
+                Text {
+                  Layout.fillWidth: true
+                  text: qsTr("Pilih folder dari akun MEGA Anda")
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  elide: Text.ElideRight
+                }
+              }
             }
+
+            MouseArea {
+              id: addMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.addMode = !root.addMode
+            }
+          }
+
+          // Pick-to-sync: the chosen MEGA folder's CONTENTS land directly in
+          // the base folder (~/MEGA by default) — same as the desktop app.
+          Column {
+            visible: root.loggedIn && root.addMode
+            width: parent.width
+            spacing: Style.space(8)
 
             RowLayout {
               width: parent.width
               spacing: Style.space(8)
 
               Text {
-                text: qsTr("Simpan di:")
+                text: qsTr("Isi folder masuk ke:")
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -661,19 +744,16 @@ Panel {
               Rectangle {
                 id: pickRow
                 required property string modelData
-                readonly property bool alreadySynced: {
-                  for (var i = 0; i < root.pairs.length; i++)
-                    if (String(root.pairs[i].local || "").endsWith("/" + modelData)) return true
-                  return false
-                }
+                readonly property string pickState: root.pickState(modelData)
+                readonly property bool pickable: pickState === "available"
 
                 width: parent.width
                 height: pickInner.implicitHeight + Style.space(8)
                 radius: Style.cornerRadius
-                color: pickMouse.containsMouse
+                color: pickMouse.containsMouse && pickable
                   ? Style.hoverFillFor(root.foreground, Color.accent)
                   : "transparent"
-                opacity: alreadySynced ? 0.5 : 1.0
+                opacity: pickable ? 1.0 : (pickState === "synced" ? 0.5 : 0.35)
 
                 RowLayout {
                   id: pickInner
@@ -704,8 +784,12 @@ Panel {
 
                     Text {
                       Layout.fillWidth: true
-                      text: "~/" + localBaseField.text + "/" + pickRow.modelData
-                      color: root.dim
+                      text: {
+                        if (pickRow.pickState === "synced") return qsTr("sedang disinkronkan")
+                        if (pickRow.pickState === "taken") return qsTr("folder lokal dipakai sync lain")
+                        return root.home + "/" + localBaseField.text
+                      }
+                      color: pickRow.pickState === "available" ? root.dim : Qt.darker(root.dim, 1.2)
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.caption
                       elide: Text.ElideMiddle
@@ -713,8 +797,8 @@ Panel {
                   }
 
                   LucideIcon {
-                    visible: pickRow.alreadySynced
-                    name: "cloud"
+                    visible: pickRow.pickState !== "available"
+                    name: pickRow.pickState === "synced" ? "cloud" : "cloud-off"
                     iconSize: Style.font.body
                     color: root.dim
                     Layout.alignment: Qt.AlignVCenter
@@ -725,14 +809,17 @@ Panel {
                   id: pickMouse
                   anchors.fill: parent
                   hoverEnabled: true
-                  cursorShape: pickRow.alreadySynced ? Qt.ArrowCursor : Qt.PointingHandCursor
-                  enabled: !pickRow.alreadySynced
-                  onClicked: root.runCtlArgs(["add", pickRow.modelData, localBaseField.text])
+                  cursorShape: pickRow.pickable ? Qt.PointingHandCursor : Qt.ArrowCursor
+                  enabled: pickRow.pickable
+                  onClicked: {
+                    root.runCtlArgs(["add", pickRow.modelData, localBaseField.text])
+                    root.addMode = false
+                  }
                 }
 
                 PanelToolTip {
-                  visible: pickMouse.containsMouse && !pickRow.alreadySynced
-                  text: qsTr("Sinkronkan folder ini ke komputer")
+                  visible: pickMouse.containsMouse && pickRow.pickable
+                  text: qsTr("Sinkronkan isi folder ini")
                   fontFamily: root.fontFamily
                 }
               }
@@ -740,6 +827,8 @@ Panel {
           }
 
           Text {
+            width: parent.width
+            text: qsTr("Klik kanan ikon bar: jeda/lanjut semua")
             color: Qt.darker(root.foreground, 1.9)
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
@@ -748,5 +837,72 @@ Panel {
         }
       }
     }
+  }
+
+  // Filled pause/play glyphs: outline glyphs read as muddled at these sizes,
+  // so solid shapes are drawn directly.
+  component FilledPause: Item {
+    id: glyph
+    property color color: "#ffffff"
+    property real iconSize: 14
+    implicitWidth: iconSize
+    implicitHeight: iconSize
+    width: iconSize
+    height: iconSize
+
+    Rectangle {
+      x: 0
+      width: parent.width * 0.34
+      height: parent.height
+      radius: width / 2
+      color: glyph.color
+    }
+    Rectangle {
+      anchors.right: parent.right
+      width: parent.width * 0.34
+      height: parent.height
+      radius: width / 2
+      color: glyph.color
+    }
+  }
+
+  component FilledPlay: Item {
+    id: glyph
+    property color color: "#ffffff"
+    property real iconSize: 14
+    implicitWidth: iconSize * 0.85
+    implicitHeight: iconSize
+    width: iconSize * 0.85
+    height: iconSize
+
+    Canvas {
+      id: triangle
+      anchors.fill: parent
+      onPaint: {
+        var ctx = getContext("2d")
+        ctx.reset()
+        ctx.fillStyle = glyph.color
+        ctx.beginPath()
+        ctx.moveTo(0, 0)
+        ctx.lineTo(width, height / 2)
+        ctx.lineTo(0, height)
+        ctx.closePath()
+        ctx.fill()
+      }
+      Connections {
+        target: glyph
+        function onColorChanged() { triangle.requestPaint() }
+      }
+    }
+  }
+
+  Component {
+    id: pauseGlyph
+    FilledPause { color: root.foreground; iconSize: Style.font.body }
+  }
+
+  Component {
+    id: playGlyph
+    FilledPlay { color: root.foreground; iconSize: Style.font.body }
   }
 }

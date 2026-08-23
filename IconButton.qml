@@ -8,8 +8,10 @@ BorderSurface {
   id: root
 
   property string iconName: ""
+  property Component iconComponent: null
   property string tooltipText: ""
   property color foreground: Color.foreground
+  property color iconColor: root.enabled ? root.foreground : Qt.darker(root.foreground, 2.0)
   property real iconSize: Style.font.icon
   property real size: Math.max(Style.space(26), iconSize + Style.spacing.sm * 2)
 
@@ -26,11 +28,18 @@ BorderSurface {
 
   Behavior on color { ColorAnimation { duration: 60 } }
 
+  Loader {
+    anchors.centerIn: parent
+    visible: root.iconComponent !== null
+    sourceComponent: root.iconComponent
+  }
+
   LucideIcon {
     anchors.centerIn: parent
+    visible: root.iconComponent === null
     name: root.iconName
     iconSize: root.iconSize
-    color: root.enabled ? root.foreground : Qt.darker(root.foreground, 2.0)
+    color: root.iconColor
   }
 
   MouseArea {

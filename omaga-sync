@@ -345,7 +345,8 @@ def cmd_status():
 
 
 def cmd_add(remote_name, local_base="MEGA"):
-    """Sync remote folder /<name> into ~/<local_base>/<name> (MEGAsync-style)."""
+    """Sync a remote folder's CONTENTS into ~/<local_base> (MEGAsync-style:
+    choosing /OS fills ~/MEGA with the contents, not ~/MEGA/OS)."""
     name = str(remote_name or "").strip().strip("/")
     if not name or ".." in name.split("/"):
         log("nama folder remote tidak valid")
@@ -355,9 +356,20 @@ def cmd_add(remote_name, local_base="MEGA"):
     base = Path(str(local_base or "MEGA")).expanduser()
     if not base.is_absolute():
         base = Path.home() / base
-    local = base / name
-    local.mkdir(parents=True, exist_ok=True)
-    rc, _, err = sh(["mega-sync", str(local), "/" + name], timeout=15)
+    remote = "/" + name
+
+    _, out, _ = sh(SYNC_LIST_ARGS, timeout=10)
+    for pair in parse_pairs(out):
+        if pair["remote"] == remote and pair["local"] == str(base):
+            log(f"{remote} sudah disinkronkan ke {base}")
+            return 0
+        if pair["local"] == str(base):
+            log(f"folder {base} sudah dipakai sync {pair['remote']}; "
+                "pakai folder dasar lain")
+            return 1
+
+    base.mkdir(parents=True, exist_ok=True)
+    rc, _, err = sh(["mega-sync", str(base), remote], timeout=15)
     if rc != 0:
         log(f"gagal menambah sync: {err.strip()}")
     return rc
