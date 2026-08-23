@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "bisma.omaga-sync",
+  "name": "Omaga Sync",
+  "version": "0.1.0",
+  "author": "bisma",
+  "license": "MIT",
+  "description": "MEGA two-way sync status and control in the Omarchy bar, powered by the official MEGAcmd engine.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Omaga Sync",
+    "description": "MEGA two-way sync status, pause/resume, and folder access.",
+    "category": "Files",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

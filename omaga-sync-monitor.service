@@ -1,0 +1,12 @@
+[Unit]
+Description=Omaga Sync - status monitor
+After=omaga-sync-engine.service
+Wants=omaga-sync-engine.service
+
+[Service]
+ExecStart=%h/.local/bin/omaga-sync monitor
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

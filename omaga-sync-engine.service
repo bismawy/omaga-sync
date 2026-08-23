@@ -1,0 +1,12 @@
+[Unit]
+Description=Omaga Sync - MEGAcmd server (two-way sync engine)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/mega-cmd-server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
