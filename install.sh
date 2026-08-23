@@ -35,6 +35,7 @@ if ! command -v mega-cmd-server >/dev/null 2>&1; then
 fi
 
 install -m 755 "$SRC_DIR/omaga-sync" "$BIN_DST"
+install -m 755 "$SRC_DIR/omaga-login" "$HOME/.local/bin/omaga-login"
 install -m 644 "$SRC_DIR/omaga-sync-engine.service" "$UNIT_DST/"
 install -m 644 "$SRC_DIR/omaga-sync-monitor.service" "$UNIT_DST/"
 

@@ -328,20 +328,14 @@ def cmd_open(path):
 
 
 def cmd_login(email=""):
-    # The standalone `mega-login` client is non-interactive (it demands every
-    # argument), so open the interactive `mega-cmd` shell instead with the
-    # `login <email>` line pre-fed; the password and 2FA prompts read the
-    # terminal directly and stay hidden while typing.
-    import shlex
-    script = (
-        "printf '\\n== Omaga Sync ==\\n"
-        "Login ke MEGA: ketik password lalu kode 2FA saat diminta (input tersembunyi).\\n"
-        "Setelah berhasil, ketik quit atau tutup jendela ini.\\n\\n'; "
-        "( printf 'login " + (shlex.quote(email) if email else "") + "\\n'; cat ) | mega-cmd"
-    )
+    # The standalone `mega-login` client is non-interactive, and piping
+    # commands into `mega-cmd` races the keyboard with its password prompt.
+    # omaga-login gives mega-cmd its own pty, feeds `login <email>`, and
+    # bridges the real terminal — password and 2FA typing stays hidden.
     try:
+        args = ["omaga-login"] + ([email] if email else [])
         subprocess.Popen(
-            ["omarchy-launch-terminal", "bash", "-c", script],
+            ["omarchy-launch-terminal"] + args,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True)
         return 0
