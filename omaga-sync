@@ -77,19 +77,34 @@ def server_process_running():
 
 
 def parse_whoami(out):
-    """Extract email and storage usage from `mega-whoami` text output."""
+    """Extract email (storage quota comes from mega-df instead)."""
     info = {"email": "", "used_bytes": 0, "total_bytes": 0}
     email = re.search(r"e-?mail\s*:\s*<?([^\s<>]+@[^\s<>]+)", out, re.IGNORECASE)
     if email:
         info["email"] = email.group(1)
-    sizes = re.findall(
-        r"([\d.]+)\s*(B|KB|MB|GB|TB|PB)\s*(?:of|/)\s*([\d.]+)\s*(B|KB|MB|GB|TB|PB)",
-        out, re.IGNORECASE)
-    if sizes:
-        used, u_unit, total, t_unit = sizes[-1]
-        info["used_bytes"] = int(float(used) * UNIT_SPEC[u_unit.upper()])
-        info["total_bytes"] = int(float(total) * UNIT_SPEC[t_unit.upper()])
     return info
+
+
+def parse_df(out):
+    """USED STORAGE line from `mega-df`: used bytes and total bytes."""
+    m = re.search(r"USED STORAGE:\s+(\d+)\s+[\d.]+%\s*of\s+(\d+)", out)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    return 0, 0
+
+
+def parse_remote_folders(out):
+    """`mega-ls /` output: one entry per line, optionally prefixed with a
+    decorative emoji/icon. Folder names may contain spaces."""
+    names = []
+    for line in out.splitlines():
+        line = line.strip()
+        if not line or line.startswith("["):
+            continue
+        name = re.sub(r"^[^\w]+", "", line).strip()
+        if name and name not in names:
+            names.append(name)
+    return names
 
 
 def normalize_pair(run, status):
@@ -154,6 +169,7 @@ def notify(summary, body=""):
 class Monitor:
     def __init__(self):
         self.account = {"email": "", "used_bytes": 0, "total_bytes": 0}
+        self.remote_folders = []
         self.whoami_tick = WHOAMI_EVERY_TICKS  # refresh on first loop
         self.starting_ticks = 0
         self.last_state = None
@@ -186,6 +202,13 @@ class Monitor:
         if self.whoami_tick >= WHOAMI_EVERY_TICKS:
             self.whoami_tick = 0
             self.account = parse_whoami(out)
+            _, df_out, _ = sh(["mega-df"], timeout=10)
+            used, total = parse_df(df_out)
+            if total > 0:
+                self.account["used_bytes"] = used
+                self.account["total_bytes"] = total
+            _, ls_out, _ = sh(["mega-ls", "/"], timeout=10)
+            self.remote_folders = parse_remote_folders(ls_out)
         self.whoami_tick += 1
 
         _, sync_out, _ = sh(SYNC_LIST_ARGS, timeout=10)
@@ -236,6 +259,7 @@ class Monitor:
             "usedBytes": self.account.get("used_bytes", 0) if healthy else 0,
             "totalBytes": self.account.get("total_bytes", 0) if healthy else 0,
             "pairs": partial.get("pairs", []),
+            "remoteFolders": self.remote_folders if partial.get("state") != "auth" else [],
             "message": partial.get("message", ""),
         }
         STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -320,6 +344,25 @@ def cmd_status():
         return 1
 
 
+def cmd_add(remote_name, local_base="MEGA"):
+    """Sync remote folder /<name> into ~/<local_base>/<name> (MEGAsync-style)."""
+    name = str(remote_name or "").strip().strip("/")
+    if not name or ".." in name.split("/"):
+        log("nama folder remote tidak valid")
+        return 1
+    if not ensure_engine():
+        return 1
+    base = Path(str(local_base or "MEGA")).expanduser()
+    if not base.is_absolute():
+        base = Path.home() / base
+    local = base / name
+    local.mkdir(parents=True, exist_ok=True)
+    rc, _, err = sh(["mega-sync", str(local), "/" + name], timeout=15)
+    if rc != 0:
+        log(f"gagal menambah sync: {err.strip()}")
+    return rc
+
+
 def cmd_open(path):
     if not path or not Path(path).expanduser().is_dir():
         log(f"folder tidak ditemukan: {path}")
@@ -358,6 +401,9 @@ def main():
         return cmd_repair()
     elif args[0] == "login":
         return cmd_login(args[1] if len(args) > 1 else "")
+    elif args[0] == "add":
+        return cmd_add(args[1] if len(args) > 1 else "",
+                       args[2] if len(args) > 2 else "MEGA")
     elif args[0] == "open":
         return cmd_open(args[1] if len(args) > 1 else "")
     elif args[0] == "once":  # one poll — for smoke testing

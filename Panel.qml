@@ -27,6 +27,8 @@ Panel {
 
   readonly property string syncState: status ? String(status.state || "") : ""
   readonly property var pairs: status && status.pairs instanceof Array ? status.pairs : []
+  readonly property var remoteFolders: status && status.remoteFolders instanceof Array ? status.remoteFolders : []
+  readonly property bool loggedIn: ["synced", "syncing", "paused", "error"].indexOf(syncState) !== -1
   readonly property string email: status ? String(status.email || "") : ""
   readonly property real usedBytes: status ? Number(status.usedBytes || 0) : 0
   readonly property real totalBytes: status ? Number(status.totalBytes || 0) : 0
@@ -81,6 +83,12 @@ Panel {
     actionProcess.command = path !== undefined && path !== ""
       ? [ctlBin, sub, path]
       : [ctlBin, sub]
+    actionProcess.running = true
+  }
+
+  function runCtlArgs(argv) {
+    if (actionProcess.running) return
+    actionProcess.command = [ctlBin].concat(argv)
     actionProcess.running = true
   }
 
@@ -218,7 +226,7 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: emailField.activeFocus
+      blocked: emailField.activeFocus || localBaseField.activeFocus
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
@@ -587,9 +595,151 @@ Panel {
             }
           }
 
-          Text {
+          // Pick-to-sync: choose a MEGA folder, it lands in ~/MEGA/<name>
+          // (the same default the desktop app uses).
+          Column {
+            visible: root.loggedIn
             width: parent.width
-            text: qsTr("Klik kanan ikon: jeda/lanjut · klik tengah: muat ulang · p: jeda · r: muat ulang")
+            spacing: Style.space(8)
+
+            PanelSectionHeader {
+              text: qsTr("FOLDER MEGA ANDA")
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+            }
+
+            RowLayout {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                text: qsTr("Simpan di:")
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                Layout.alignment: Qt.AlignVCenter
+              }
+
+              TextField {
+                id: localBaseField
+                Layout.fillWidth: true
+                text: "MEGA"
+                foreground: root.foreground
+                font.family: root.fontFamily
+                Keys.onPressed: function(event) {
+                  if (event.key === Qt.Key_Escape) {
+                    keyCatcher.forceActiveFocus()
+                    event.accepted = true
+                  }
+                }
+                onActiveFocusChanged: if (!activeFocus) keyCatcher.forceActiveFocus()
+              }
+
+              IconButton {
+                iconName: "rotate-cw"
+                tooltipText: qsTr("Muat ulang daftar folder")
+                foreground: root.foreground
+                iconSize: Style.font.body
+                Layout.alignment: Qt.AlignVCenter
+                onClicked: root.refresh()
+              }
+            }
+
+            Text {
+              visible: root.remoteFolders.length === 0
+              width: parent.width
+              text: qsTr("Daftar folder MEGA sedang dimuat… (menyusul dalam ±1 menit)")
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              wrapMode: Text.WordWrap
+            }
+
+            Repeater {
+              model: root.remoteFolders
+
+              Rectangle {
+                id: pickRow
+                required property string modelData
+                readonly property bool alreadySynced: {
+                  for (var i = 0; i < root.pairs.length; i++)
+                    if (String(root.pairs[i].local || "").endsWith("/" + modelData)) return true
+                  return false
+                }
+
+                width: parent.width
+                height: pickInner.implicitHeight + Style.space(8)
+                radius: Style.cornerRadius
+                color: pickMouse.containsMouse
+                  ? Style.hoverFillFor(root.foreground, Color.accent)
+                  : "transparent"
+                opacity: alreadySynced ? 0.5 : 1.0
+
+                RowLayout {
+                  id: pickInner
+                  anchors.fill: parent
+                  anchors.leftMargin: Style.space(8)
+                  anchors.rightMargin: Style.space(8)
+                  spacing: Style.space(8)
+
+                  LucideIcon {
+                    name: "folder"
+                    iconSize: Style.font.body
+                    color: root.dim
+                    Layout.alignment: Qt.AlignVCenter
+                  }
+
+                  ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.space(1)
+
+                    Text {
+                      Layout.fillWidth: true
+                      text: pickRow.modelData
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.body
+                      elide: Text.ElideMiddle
+                    }
+
+                    Text {
+                      Layout.fillWidth: true
+                      text: "~/" + localBaseField.text + "/" + pickRow.modelData
+                      color: root.dim
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideMiddle
+                    }
+                  }
+
+                  LucideIcon {
+                    visible: pickRow.alreadySynced
+                    name: "cloud"
+                    iconSize: Style.font.body
+                    color: root.dim
+                    Layout.alignment: Qt.AlignVCenter
+                  }
+                }
+
+                MouseArea {
+                  id: pickMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: pickRow.alreadySynced ? Qt.ArrowCursor : Qt.PointingHandCursor
+                  enabled: !pickRow.alreadySynced
+                  onClicked: root.runCtlArgs(["add", pickRow.modelData, localBaseField.text])
+                }
+
+                PanelToolTip {
+                  visible: pickMouse.containsMouse && !pickRow.alreadySynced
+                  text: qsTr("Sinkronkan folder ini ke komputer")
+                  fontFamily: root.fontFamily
+                }
+              }
+            }
+          }
+
+          Text {
             color: Qt.darker(root.foreground, 1.9)
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
