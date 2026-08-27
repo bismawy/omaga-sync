@@ -30,6 +30,11 @@ Panel {
   readonly property string syncState: status ? String(status.state || "") : ""
   readonly property var pairs: status && status.pairs instanceof Array ? status.pairs : []
   readonly property var remoteFolders: status && status.remoteFolders instanceof Array ? status.remoteFolders : []
+  readonly property var activeTransfers: status && status.activeTransfers instanceof Array ? status.activeTransfers : []
+  readonly property var transfersSummary: status && status.transfersSummary ? status.transfersSummary : null
+  readonly property int downloadsCount: transfersSummary ? Number(transfersSummary.downloadsCount || 0) : 0
+  readonly property int uploadsCount: transfersSummary ? Number(transfersSummary.uploadsCount || 0) : 0
+  readonly property bool hasTransfers: activeTransfers.length > 0 || downloadsCount > 0 || uploadsCount > 0
   readonly property bool loggedIn: ["synced", "syncing", "paused", "error"].indexOf(syncState) !== -1
   readonly property string email: status ? String(status.email || "") : ""
   readonly property real usedBytes: status ? Number(status.usedBytes || 0) : 0
@@ -89,6 +94,9 @@ Panel {
         if (parsed.remoteFolders instanceof Array && parsed.remoteFolders.length > 100) {
           parsed.remoteFolders = parsed.remoteFolders.slice(0, 100)
         }
+        if (parsed.activeTransfers instanceof Array && parsed.activeTransfers.length > 6) {
+          parsed.activeTransfers = parsed.activeTransfers.slice(0, 6)
+        }
         status = parsed
         statusError = ""
       }
@@ -141,6 +149,32 @@ Panel {
       case "synced": return t("pair_synced")
       default: return t("pair_checking")
     }
+  }
+
+  function transferStateLabel(st) {
+    switch (String(st || "").toLowerCase()) {
+      case "retrying": return t("state_retrying")
+      case "queued": return t("state_queued")
+      case "active":
+      case "transferring":
+      case "syncing": return t("state_transferring")
+      case "completed": return t("state_completed")
+      case "failed":
+      case "error": return t("state_failed")
+      default: return String(st || "")
+    }
+  }
+
+  function transfersSummaryText() {
+    if (!transfersSummary) return ""
+    var parts = []
+    if (downloadsCount > 0) {
+      parts.push(t("downloading_files") + " " + downloadsCount + " " + t("files_count") + " (" + transfersSummary.downloadTotal + ")")
+    }
+    if (uploadsCount > 0) {
+      parts.push(t("uploading_files") + " " + uploadsCount + " " + t("files_count") + " (" + transfersSummary.uploadTotal + ")")
+    }
+    return parts.join(" · ")
   }
 
   function switchPanel(direction) {
@@ -508,6 +542,116 @@ Panel {
                     : Color.accent
 
                   Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                }
+              }
+            }
+          }
+
+          // Sync Activity: real-time transfer progress and active files
+          Item {
+            visible: root.hasTransfers && !root.allPaused && root.loggedIn
+            width: parent.width
+            height: visible ? activitySection.implicitHeight : 0
+
+            Column {
+              id: activitySection
+              width: parent.width
+              spacing: Style.space(8)
+
+              PanelSectionHeader {
+                text: t("sec_activity")
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+              }
+
+              Text {
+                visible: text !== ""
+                width: parent.width
+                textFormat: Text.PlainText
+                text: root.transfersSummaryText()
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
+              }
+
+              Repeater {
+                model: root.activeTransfers
+
+                Rectangle {
+                  id: transferRow
+                  required property var modelData
+                  width: parent.width
+                  height: transferInner.implicitHeight + Style.space(6)
+                  radius: Style.cornerRadius
+                  color: Style.hoverFillFor(root.foreground, Color.accent)
+
+                  RowLayout {
+                    id: transferInner
+                    anchors.fill: parent
+                    anchors.leftMargin: Style.space(8)
+                    anchors.rightMargin: Style.space(8)
+                    spacing: Style.space(8)
+
+                    LucideIcon {
+                      name: transferRow.modelData && transferRow.modelData.type === "upload" ? "cloud-upload" : "cloud-download"
+                      iconSize: Style.font.body
+                      color: transferRow.modelData && transferRow.modelData.state === "retrying" ? root.urgentColor : Color.accent
+                      Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    ColumnLayout {
+                      Layout.fillWidth: true
+                      spacing: Style.space(1)
+
+                      Text {
+                        Layout.fillWidth: true
+                        textFormat: Text.PlainText
+                        text: transferRow.modelData ? String(transferRow.modelData.file || "") : ""
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                        elide: Text.ElideMiddle
+                      }
+
+                      Text {
+                        Layout.fillWidth: true
+                        textFormat: Text.PlainText
+                        text: transferRow.modelData ? String(transferRow.modelData.progress || "") : ""
+                        color: root.dim
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        elide: Text.ElideRight
+                      }
+                    }
+
+                    Rectangle {
+                      Layout.alignment: Qt.AlignVCenter
+                      radius: Style.cornerRadius > 0 ? height / 2 : 0
+                      color: {
+                        var st = transferRow.modelData ? String(transferRow.modelData.state || "") : ""
+                        if (st === "retrying") return Qt.rgba(root.urgentColor.r, root.urgentColor.g, root.urgentColor.b, 0.2)
+                        return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.2)
+                      }
+                      implicitWidth: stateText.implicitWidth + Style.space(10)
+                      implicitHeight: stateText.implicitHeight + Style.space(4)
+
+                      Text {
+                        id: stateText
+                        anchors.centerIn: parent
+                        textFormat: Text.PlainText
+                        text: transferRow.modelData ? root.transferStateLabel(transferRow.modelData.state) : ""
+                        color: {
+                          var st = transferRow.modelData ? String(transferRow.modelData.state || "") : ""
+                          if (st === "retrying") return root.urgentColor
+                          return Color.accent
+                        }
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                      }
+                    }
+                  }
                 }
               }
             }

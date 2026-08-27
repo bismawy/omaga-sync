@@ -38,6 +38,16 @@ var STRINGS = {
   tt_sync_contents: { id: "Sinkronkan isi folder ini", en: "Sync this folder's contents" },
 
   // Sections & Content
+  sec_activity: { id: "AKTIVITAS SINKRONISASI", en: "SYNC ACTIVITY" },
+  downloading_files: { id: "Mengunduh", en: "Downloading" },
+  uploading_files: { id: "Mengunggah", en: "Uploading" },
+  files_count: { id: "file", en: "files" },
+  state_retrying: { id: "mengulang", en: "retrying" },
+  state_queued: { id: "antre", en: "queued" },
+  state_transferring: { id: "proses", en: "transferring" },
+  state_active: { id: "aktif", en: "active" },
+  state_completed: { id: "selesai", en: "completed" },
+  state_failed: { id: "gagal", en: "failed" },
   sec_usage: { id: "PENGGUNAAN", en: "USAGE" },
   sec_folders: { id: "FOLDER", en: "FOLDERS" },
   no_folders: { id: "Belum ada folder sync. Tambahkan dengan:\nmega-sync ~/Sync /Sync", en: "No sync folders yet. Add one with:\nmega-sync ~/Sync /Sync" },

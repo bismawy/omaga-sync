@@ -52,6 +52,7 @@ SYNC_LIST_ARGS = ["mega-sync", "--col-separator=|",
 MAX_PROC_OUTPUT = 256 * 1024  # 256 KB max command output
 MAX_PAIRS = 50
 MAX_REMOTE_FOLDERS = 100
+MAX_TRANSFERS = 6
 MAX_STR_LEN = 256
 MAX_STATUS_JSON_BYTES = 64 * 1024
 
@@ -80,6 +81,49 @@ def engine_active():
 def server_process_running():
     rc, _, _ = sh(["pgrep", "-u", str(os.getuid()), "-x", "mega-cmd-server"], timeout=4)
     return rc == 0
+
+
+def parse_transfers_summary(out):
+    """Extract transfer counts and totals from `mega-transfers --summary`."""
+    summary = {
+        "downloadsCount": 0, "downloaded": "0 B", "downloadTotal": "0 B", "downloadPercent": 0.0,
+        "uploadsCount": 0, "uploaded": "0 B", "uploadTotal": "0 B", "uploadPercent": 0.0,
+    }
+    m = re.findall(r"(\d+)\s+([\d.]+\s+[A-Za-z]+)\s+([\d.]+\s+[A-Za-z]+)\s+([\d.]+)%", out)
+    if len(m) >= 2:
+        summary["downloadsCount"] = int(m[0][0])
+        summary["downloaded"] = m[0][1].strip()
+        summary["downloadTotal"] = m[0][2].strip()
+        summary["downloadPercent"] = float(m[0][3])
+        summary["uploadsCount"] = int(m[1][0])
+        summary["uploaded"] = m[1][1].strip()
+        summary["uploadTotal"] = m[1][2].strip()
+        summary["uploadPercent"] = float(m[1][3])
+    return summary
+
+
+def parse_active_transfers(out):
+    """Extract individual ongoing transfer rows from `mega-transfers --show-syncs`."""
+    transfers = []
+    for line in out.splitlines():
+        if len(transfers) >= MAX_TRANSFERS:
+            break
+        line = line.strip()
+        if not line or "|" not in line or line.startswith("TYPE"):
+            continue
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) >= 6:
+            ttype, tag, src, dst, prog, state = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+            filename = src.rsplit("/", 1)[-1] if "/" in src else src
+            direction = "upload" if "⇑" in ttype else "download"
+            transfers.append({
+                "type": direction,
+                "file": filename[:64],
+                "path": src[:MAX_STR_LEN],
+                "progress": prog[:48],
+                "state": state.lower()[:32],
+            })
+    return transfers
 
 
 def parse_whoami(out):
@@ -220,13 +264,27 @@ class Monitor:
         _, sync_out, _ = sh(SYNC_LIST_ARGS, timeout=10)
         pairs = parse_pairs(sync_out)
         states = [p["state"] for p in pairs]
+
+        active_transfers = []
+        transfers_summary = None
+
+        if any(s == "syncing" for s in states):
+            _, t_sum_out, _ = sh(["mega-transfers", "--summary"], timeout=5)
+            transfers_summary = parse_transfers_summary(t_sum_out)
+            if transfers_summary["downloadsCount"] > 0 or transfers_summary["uploadsCount"] > 0:
+                _, t_act_out, _ = sh(["mega-transfers", "--show-syncs", "--col-separator=|",
+                                      f"--limit={MAX_TRANSFERS}"], timeout=5)
+                active_transfers = parse_active_transfers(t_act_out)
+
         if any(s == "error" for s in states):
             return {"state": "error", "pairs": pairs,
+                    "transfersSummary": transfers_summary, "activeTransfers": active_transfers,
                     "message": "; ".join(p["error"] for p in pairs if p["error"])[:200]}
         if pairs and all(s == "paused" for s in states):
             return {"state": "paused", "pairs": pairs}
         if any(s != "synced" for s in states):
-            return {"state": "syncing", "pairs": pairs}
+            return {"state": "syncing", "pairs": pairs,
+                    "transfersSummary": transfers_summary, "activeTransfers": active_transfers}
         return {"state": "synced", "pairs": pairs}
 
     # -- notifications -------------------------------------------------------
@@ -268,12 +326,15 @@ class Monitor:
             "totalBytes": int(self.account.get("total_bytes", 0)) if healthy else 0,
             "pairs": pairs,
             "remoteFolders": folders,
+            "transfersSummary": partial.get("transfersSummary"),
+            "activeTransfers": partial.get("activeTransfers", [])[:MAX_TRANSFERS],
             "message": str(partial.get("message", ""))[:MAX_STR_LEN],
         }
         raw_json = json.dumps(status, ensure_ascii=False)
         if len(raw_json.encode("utf-8")) > MAX_STATUS_JSON_BYTES:
             status["remoteFolders"] = []
             status["pairs"] = pairs[:10]
+            status["activeTransfers"] = status.get("activeTransfers", [])[:3]
             raw_json = json.dumps(status, ensure_ascii=False)
 
         STATE_DIR.mkdir(parents=True, exist_ok=True)
