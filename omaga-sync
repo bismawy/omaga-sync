@@ -225,6 +225,8 @@ class Monitor:
         self.last_state = None
         self.last_notify_at = 0.0
         self.last_notify_key = ""
+        self.batch_total_downloads = 0
+        self.batch_total_uploads = 0
 
     # -- polling -----------------------------------------------------------
     def read_once(self):
@@ -271,10 +273,36 @@ class Monitor:
         if any(s == "syncing" for s in states):
             _, t_sum_out, _ = sh(["mega-transfers", "--summary"], timeout=5)
             transfers_summary = parse_transfers_summary(t_sum_out)
-            if transfers_summary["downloadsCount"] > 0 or transfers_summary["uploadsCount"] > 0:
+            dl_cnt = transfers_summary["downloadsCount"]
+            ul_cnt = transfers_summary["uploadsCount"]
+
+            if dl_cnt > 0:
+                if dl_cnt > self.batch_total_downloads:
+                    self.batch_total_downloads = dl_cnt
+                transfers_summary["downloadsTotalCount"] = self.batch_total_downloads
+                transfers_summary["downloadsCompletedCount"] = max(0, self.batch_total_downloads - dl_cnt)
+            else:
+                self.batch_total_downloads = 0
+                transfers_summary["downloadsTotalCount"] = 0
+                transfers_summary["downloadsCompletedCount"] = 0
+
+            if ul_cnt > 0:
+                if ul_cnt > self.batch_total_uploads:
+                    self.batch_total_uploads = ul_cnt
+                transfers_summary["uploadsTotalCount"] = self.batch_total_uploads
+                transfers_summary["uploadsCompletedCount"] = max(0, self.batch_total_uploads - ul_cnt)
+            else:
+                self.batch_total_uploads = 0
+                transfers_summary["uploadsTotalCount"] = 0
+                transfers_summary["uploadsCompletedCount"] = 0
+
+            if dl_cnt > 0 or ul_cnt > 0:
                 _, t_act_out, _ = sh(["mega-transfers", "--show-syncs", "--col-separator=|",
                                       f"--limit={MAX_TRANSFERS}"], timeout=5)
                 active_transfers = parse_active_transfers(t_act_out)
+        else:
+            self.batch_total_downloads = 0
+            self.batch_total_uploads = 0
 
         if any(s == "error" for s in states):
             return {"state": "error", "pairs": pairs,

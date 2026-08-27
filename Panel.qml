@@ -33,7 +33,16 @@ Panel {
   readonly property var activeTransfers: status && status.activeTransfers instanceof Array ? status.activeTransfers : []
   readonly property var transfersSummary: status && status.transfersSummary ? status.transfersSummary : null
   readonly property int downloadsCount: transfersSummary ? Number(transfersSummary.downloadsCount || 0) : 0
+  readonly property int downloadsTotalCount: transfersSummary ? Number(transfersSummary.downloadsTotalCount || 0) : 0
+  readonly property int downloadsCompletedCount: transfersSummary ? Number(transfersSummary.downloadsCompletedCount || 0) : 0
   readonly property int uploadsCount: transfersSummary ? Number(transfersSummary.uploadsCount || 0) : 0
+  readonly property int uploadsTotalCount: transfersSummary ? Number(transfersSummary.uploadsTotalCount || 0) : 0
+  readonly property int uploadsCompletedCount: transfersSummary ? Number(transfersSummary.uploadsCompletedCount || 0) : 0
+
+  readonly property int totalTransfersBatch: (downloadsTotalCount > 0 ? downloadsTotalCount : downloadsCount) + (uploadsTotalCount > 0 ? uploadsTotalCount : uploadsCount)
+  readonly property int totalTransfersCompleted: downloadsCompletedCount + uploadsCompletedCount
+  readonly property real batchProgressFraction: totalTransfersBatch > 0 ? Math.min(1.0, Math.max(0.0, totalTransfersCompleted / totalTransfersBatch)) : 0.0
+
   readonly property bool hasTransfers: activeTransfers.length > 0 || downloadsCount > 0 || uploadsCount > 0
   readonly property bool loggedIn: ["synced", "syncing", "paused", "error"].indexOf(syncState) !== -1
   readonly property string email: status ? String(status.email || "") : ""
@@ -168,11 +177,19 @@ Panel {
   function transfersSummaryText() {
     if (!transfersSummary) return ""
     var parts = []
-    if (downloadsCount > 0) {
-      parts.push(t("downloading_files") + " " + downloadsCount + " " + t("files_count") + " (" + transfersSummary.downloadTotal + ")")
+    if (downloadsCount > 0 || downloadsCompletedCount > 0) {
+      var dlTotal = downloadsTotalCount > 0 ? downloadsTotalCount : downloadsCount
+      var dlRatio = (dlTotal > downloadsCount)
+        ? downloadsCompletedCount + "/" + dlTotal + " " + t("files_count")
+        : downloadsCount + " " + t("files_count")
+      parts.push(t("downloading_files") + " " + dlRatio + " (" + transfersSummary.downloadTotal + ")")
     }
-    if (uploadsCount > 0) {
-      parts.push(t("uploading_files") + " " + uploadsCount + " " + t("files_count") + " (" + transfersSummary.uploadTotal + ")")
+    if (uploadsCount > 0 || uploadsCompletedCount > 0) {
+      var ulTotal = uploadsTotalCount > 0 ? uploadsTotalCount : uploadsCount
+      var ulRatio = (ulTotal > uploadsCount)
+        ? uploadsCompletedCount + "/" + ulTotal + " " + t("files_count")
+        : uploadsCount + " " + t("files_count")
+      parts.push(t("uploading_files") + " " + ulRatio + " (" + transfersSummary.uploadTotal + ")")
     }
     return parts.join(" · ")
   }
@@ -573,6 +590,24 @@ Panel {
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
                 wrapMode: Text.WordWrap
+              }
+
+              // Batch progress bar (e.g. 140 / 360)
+              Rectangle {
+                visible: root.totalTransfersBatch > 0 && root.totalTransfersCompleted > 0
+                width: parent.width
+                height: Style.space(4)
+                radius: Style.cornerRadius > 0 ? height / 2 : 0
+                color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12)
+
+                Rectangle {
+                  width: Math.round(parent.width * root.batchProgressFraction)
+                  height: parent.height
+                  radius: parent.radius
+                  color: Color.accent
+
+                  Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                }
               }
 
               Flickable {
