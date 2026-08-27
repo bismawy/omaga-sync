@@ -179,16 +179,12 @@ Panel {
     var parts = []
     if (downloadsCount > 0 || downloadsCompletedCount > 0) {
       var dlTotal = downloadsTotalCount > 0 ? downloadsTotalCount : downloadsCount
-      var dlRatio = (dlTotal > downloadsCount)
-        ? downloadsCompletedCount + "/" + dlTotal + " " + t("files_count")
-        : downloadsCount + " " + t("files_count")
+      var dlRatio = downloadsCompletedCount + "/" + dlTotal + " " + t("files_count")
       parts.push(t("downloading_files") + " " + dlRatio + " (" + transfersSummary.downloadTotal + ")")
     }
     if (uploadsCount > 0 || uploadsCompletedCount > 0) {
       var ulTotal = uploadsTotalCount > 0 ? uploadsTotalCount : uploadsCount
-      var ulRatio = (ulTotal > uploadsCount)
-        ? uploadsCompletedCount + "/" + ulTotal + " " + t("files_count")
-        : uploadsCount + " " + t("files_count")
+      var ulRatio = uploadsCompletedCount + "/" + ulTotal + " " + t("files_count")
       parts.push(t("uploading_files") + " " + ulRatio + " (" + transfersSummary.uploadTotal + ")")
     }
     return parts.join(" · ")
@@ -594,14 +590,14 @@ Panel {
 
               // Batch progress bar (e.g. 140 / 360)
               Rectangle {
-                visible: root.totalTransfersBatch > 0 && root.totalTransfersCompleted > 0
+                visible: root.totalTransfersBatch > 0
                 width: parent.width
                 height: Style.space(4)
                 radius: Style.cornerRadius > 0 ? height / 2 : 0
                 color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12)
 
                 Rectangle {
-                  width: Math.round(parent.width * root.batchProgressFraction)
+                  width: Math.max(0, Math.min(parent.width, Math.round(parent.width * root.batchProgressFraction)))
                   height: parent.height
                   radius: parent.radius
                   color: Color.accent

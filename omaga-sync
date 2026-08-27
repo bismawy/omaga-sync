@@ -547,7 +547,17 @@ def cmd_open(path):
     if not is_safe_user_path(p) or not p.is_dir():
         log(f"folder tidak ditemukan atau di luar home: {path}")
         return 1
-    return sh(["xdg-open", str(p.resolve())])[0]
+    try:
+        subprocess.Popen(
+            ["xdg-open", str(p.resolve())],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        return 0
+    except Exception as exc:
+        log(f"gagal membuka folder: {exc}")
+        return 1
 
 
 def cmd_logout():
