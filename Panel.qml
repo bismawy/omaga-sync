@@ -285,7 +285,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(400))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(560))
+    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(640))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -575,80 +575,99 @@ Panel {
                 wrapMode: Text.WordWrap
               }
 
-              Repeater {
-                model: root.activeTransfers
+              Flickable {
+                id: activityFlick
+                width: parent.width
+                height: Math.min(activityColumn.implicitHeight, Style.space(170))
+                contentWidth: width
+                contentHeight: activityColumn.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                flickableDirection: Flickable.VerticalFlick
+                interactive: contentHeight > height
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-                Rectangle {
-                  id: transferRow
-                  required property var modelData
+                Column {
+                  id: activityColumn
                   width: parent.width
-                  height: transferInner.implicitHeight + Style.space(6)
-                  radius: Style.cornerRadius
-                  color: Style.hoverFillFor(root.foreground, Color.accent)
+                  spacing: Style.space(4)
 
-                  RowLayout {
-                    id: transferInner
-                    anchors.fill: parent
-                    anchors.leftMargin: Style.space(8)
-                    anchors.rightMargin: Style.space(8)
-                    spacing: Style.space(8)
-
-                    LucideIcon {
-                      name: transferRow.modelData && transferRow.modelData.type === "upload" ? "cloud-upload" : "cloud-download"
-                      iconSize: Style.font.body
-                      color: transferRow.modelData && transferRow.modelData.state === "retrying" ? root.urgentColor : Color.accent
-                      Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    ColumnLayout {
-                      Layout.fillWidth: true
-                      spacing: Style.space(1)
-
-                      Text {
-                        Layout.fillWidth: true
-                        textFormat: Text.PlainText
-                        text: transferRow.modelData ? String(transferRow.modelData.file || "") : ""
-                        color: root.foreground
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.caption
-                        font.bold: true
-                        elide: Text.ElideMiddle
-                      }
-
-                      Text {
-                        Layout.fillWidth: true
-                        textFormat: Text.PlainText
-                        text: transferRow.modelData ? String(transferRow.modelData.progress || "") : ""
-                        color: root.dim
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.caption
-                        elide: Text.ElideRight
-                      }
-                    }
+                  Repeater {
+                    model: root.activeTransfers
 
                     Rectangle {
-                      Layout.alignment: Qt.AlignVCenter
-                      radius: Style.cornerRadius > 0 ? height / 2 : 0
-                      color: {
-                        var st = transferRow.modelData ? String(transferRow.modelData.state || "") : ""
-                        if (st === "retrying") return Qt.rgba(root.urgentColor.r, root.urgentColor.g, root.urgentColor.b, 0.2)
-                        return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.2)
-                      }
-                      implicitWidth: stateText.implicitWidth + Style.space(10)
-                      implicitHeight: stateText.implicitHeight + Style.space(4)
+                      id: transferRow
+                      required property var modelData
+                      width: parent.width
+                      height: transferInner.implicitHeight + Style.space(6)
+                      radius: Style.cornerRadius
+                      color: Style.hoverFillFor(root.foreground, Color.accent)
 
-                      Text {
-                        id: stateText
-                        anchors.centerIn: parent
-                        textFormat: Text.PlainText
-                        text: transferRow.modelData ? root.transferStateLabel(transferRow.modelData.state) : ""
-                        color: {
-                          var st = transferRow.modelData ? String(transferRow.modelData.state || "") : ""
-                          if (st === "retrying") return root.urgentColor
-                          return Color.accent
+                      RowLayout {
+                        id: transferInner
+                        anchors.fill: parent
+                        anchors.leftMargin: Style.space(8)
+                        anchors.rightMargin: Style.space(8)
+                        spacing: Style.space(8)
+
+                        LucideIcon {
+                          name: transferRow.modelData && transferRow.modelData.type === "upload" ? "cloud-upload" : "cloud-download"
+                          iconSize: Style.font.heading
+                          color: transferRow.modelData && transferRow.modelData.state === "retrying" ? root.urgentColor : Color.accent
+                          Layout.alignment: Qt.AlignVCenter
                         }
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.caption
+
+                        ColumnLayout {
+                          Layout.fillWidth: true
+                          spacing: Style.space(1)
+
+                          Text {
+                            Layout.fillWidth: true
+                            textFormat: Text.PlainText
+                            text: transferRow.modelData ? String(transferRow.modelData.file || "") : ""
+                            color: root.foreground
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                            elide: Text.ElideMiddle
+                          }
+
+                          Text {
+                            Layout.fillWidth: true
+                            textFormat: Text.PlainText
+                            text: transferRow.modelData ? String(transferRow.modelData.progress || "") : ""
+                            color: root.dim
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideRight
+                          }
+                        }
+
+                        Rectangle {
+                          Layout.alignment: Qt.AlignVCenter
+                          radius: Style.cornerRadius > 0 ? height / 2 : 0
+                          color: {
+                            var st = transferRow.modelData ? String(transferRow.modelData.state || "") : ""
+                            if (st === "retrying") return Qt.rgba(root.urgentColor.r, root.urgentColor.g, root.urgentColor.b, 0.2)
+                            return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.2)
+                          }
+                          implicitWidth: stateText.implicitWidth + Style.space(10)
+                          implicitHeight: stateText.implicitHeight + Style.space(4)
+
+                          Text {
+                            id: stateText
+                            anchors.centerIn: parent
+                            textFormat: Text.PlainText
+                            text: transferRow.modelData ? root.transferStateLabel(transferRow.modelData.state) : ""
+                            color: {
+                              var st = transferRow.modelData ? String(transferRow.modelData.state || "") : ""
+                              if (st === "retrying") return root.urgentColor
+                              return Color.accent
+                            }
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                          }
+                        }
                       }
                     }
                   }
