@@ -14,8 +14,6 @@ Item {
 
   width: iconSize
   height: iconSize
-  implicitWidth: iconSize
-  implicitHeight: iconSize
 
   property string _raw: ""
 

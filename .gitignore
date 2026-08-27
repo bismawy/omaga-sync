@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# State files & temp
+.status.*.json
+*.tmp
+*.log
+
+# Editor & OS
+.DS_Store
+.agent/
+.idea/
+.vscode/

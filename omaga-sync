@@ -146,7 +146,7 @@ def parse_pairs(out):
                 run = upper
             elif upper in STATUS_VALUES:
                 status = upper
-            elif cell:
+            elif cell and upper not in ("NO", "NONE", "NO_ERROR", "NO ERROR", "-"):
                 words.append(cell)
         pairs.append({
             "local": local,
@@ -306,24 +306,30 @@ def pair_paths():
 
 def cmd_pause(path=""):
     if path:
-        return sh(["mega-sync", "--pause", path], timeout=10)[0]
-    if not ensure_engine():
+        rc = sh(["mega-sync", "--pause", path], timeout=10)[0]
+    elif not ensure_engine():
         return 1
-    rc = 0
-    for local in pair_paths():
-        rc |= sh(["mega-sync", "--pause", local], timeout=10)[0]
+    else:
+        rc = 0
+        for local in pair_paths():
+            rc |= sh(["mega-sync", "--pause", local], timeout=10)[0]
+    if rc == 0:
+        refresh_status_now()
     return rc
 
 
 def cmd_resume(path=""):
     if path:
-        return sh(["mega-sync", "--enable", path], timeout=10)[0]
-    if not ensure_engine():
+        rc = sh(["mega-sync", "--enable", path], timeout=10)[0]
+    elif not ensure_engine():
         return 1
-    rc = 0
-    _, out, _ = sh(SYNC_LIST_ARGS, timeout=10)
-    for pair in parse_pairs(out):
-        rc |= sh(["mega-sync", "--enable", pair["local"]], timeout=10)[0]
+    else:
+        rc = 0
+        _, out, _ = sh(SYNC_LIST_ARGS, timeout=10)
+        for pair in parse_pairs(out):
+            rc |= sh(["mega-sync", "--enable", pair["local"]], timeout=10)[0]
+    if rc == 0:
+        refresh_status_now()
     return rc
 
 
@@ -372,7 +378,21 @@ def cmd_add(remote_name, local_base="MEGA"):
     rc, _, err = sh(["mega-sync", str(base), remote], timeout=15)
     if rc != 0:
         log(f"gagal menambah sync: {err.strip()}")
-    return rc
+        return rc
+    refresh_status_now()
+    return 0
+
+
+def refresh_status_now():
+    """Re-poll and write status.json so the panel updates immediately after
+    a control command instead of waiting for the 5s monitor poll."""
+    try:
+        m = Monitor()
+        m.write_status(m.read_once())
+        return 0
+    except Exception as exc:  # never break the command on a refresh hiccup
+        log(f"gagal refresh status: {exc}")
+        return 1
 
 
 def cmd_remove(path):
@@ -386,7 +406,9 @@ def cmd_remove(path):
     rc, _, err = sh(["mega-sync", "--delete", local], timeout=15)
     if rc != 0:
         log(f"gagal menghapus sync: {err.strip()}")
-    return rc
+        return rc
+    refresh_status_now()
+    return 0
 
 
 def cmd_open(path):
@@ -394,6 +416,18 @@ def cmd_open(path):
         log(f"folder tidak ditemukan: {path}")
         return 1
     return sh(["xdg-open", str(Path(path).expanduser())])[0]
+
+
+def cmd_logout():
+    """Log out of the active MEGA session."""
+    if not ensure_engine():
+        return 1
+    rc, _, err = sh(["mega-logout"], timeout=10)
+    if rc != 0:
+        log(f"gagal logout: {err.strip()}")
+        return rc
+    refresh_status_now()
+    return 0
 
 
 def cmd_login(email=""):
@@ -427,6 +461,8 @@ def main():
         return cmd_repair()
     elif args[0] == "login":
         return cmd_login(args[1] if len(args) > 1 else "")
+    elif args[0] == "logout":
+        return cmd_logout()
     elif args[0] == "add":
         return cmd_add(args[1] if len(args) > 1 else "",
                        args[2] if len(args) > 2 else "MEGA")
@@ -435,7 +471,8 @@ def main():
     elif args[0] == "open":
         return cmd_open(args[1] if len(args) > 1 else "")
     elif args[0] == "once":  # one poll — for smoke testing
-        print(json.dumps(Monitor().write_status(Monitor().read_once()),
+        m = Monitor()
+        print(json.dumps(m.write_status(m.read_once()),
                          ensure_ascii=False, indent=2))
         return 0
     else:

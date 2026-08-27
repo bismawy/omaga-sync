@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
+import "I18n.js" as I18n
 
 // Omaga Sync — MEGA two-way sync in the Omarchy bar.
 //
@@ -47,16 +48,22 @@ Panel {
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
+  readonly property string lang: I18n.resolveLang(setting("language", "auto"))
+
+  function t(key) {
+    return I18n.tr(key, lang)
+  }
+
   readonly property string stateLabel: {
     switch (syncState) {
-      case "synced": return qsTr("Tersinkron")
-      case "syncing": return qsTr("Sinkronisasi…")
-      case "starting": return qsTr("Menyambung…")
-      case "auth": return qsTr("Perlu login")
-      case "offline": return qsTr("Server offline")
-      case "paused": return qsTr("Dijeda")
-      case "error": return qsTr("Gagal sinkron")
-      default: return qsTr("Memuat…")
+      case "synced": return t("state_synced")
+      case "syncing": return t("state_syncing")
+      case "starting": return t("state_starting")
+      case "auth": return t("state_auth")
+      case "offline": return t("state_offline")
+      case "paused": return t("state_paused")
+      case "error": return t("state_error")
+      default: return t("state_loading")
     }
   }
   readonly property string metaLabel: {
@@ -80,17 +87,16 @@ Panel {
   }
 
   function runCtl(sub, path) {
-    if (actionProcess.running) return
-    actionProcess.command = path !== undefined && path !== ""
+    var cmd = path !== undefined && path !== ""
       ? [ctlBin, sub, path]
       : [ctlBin, sub]
-    actionProcess.running = true
+    Quickshell.execDetached(cmd)
+    actionRefresh.restart()
   }
 
   function runCtlArgs(argv) {
-    if (actionProcess.running) return
-    actionProcess.command = [ctlBin].concat(argv)
-    actionProcess.running = true
+    Quickshell.execDetached([ctlBin].concat(argv))
+    actionRefresh.restart()
   }
 
   function togglePause() {
@@ -114,11 +120,11 @@ Panel {
 
   function pairStateLabel(raw) {
     switch (String(raw || "")) {
-      case "error": return qsTr("gagal")
-      case "paused": return qsTr("dijeda")
-      case "syncing": return qsTr("menyinkronkan")
-      case "synced": return qsTr("tersinkron")
-      default: return qsTr("memeriksa")
+      case "error": return t("pair_error")
+      case "paused": return t("pair_paused")
+      case "syncing": return t("pair_syncing")
+      case "synced": return t("pair_synced")
+      default: return t("pair_checking")
     }
   }
 
@@ -151,6 +157,12 @@ Panel {
     addMode = false
   }
 
+  onAddModeChanged: {
+    if (!addMode && pickFlick) {
+      pickFlick.contentY = 0
+    }
+  }
+
   FileView {
     id: statusFile
     path: root.statusPath
@@ -176,14 +188,6 @@ Panel {
     interval: 800
     repeat: false
     onTriggered: root.refresh()
-  }
-
-  Process {
-    id: actionProcess
-    running: false
-    command: []
-    stdout: StdioCollector { waitForEnd: true }
-    onExited: function(exitCode) { actionRefresh.restart() }
   }
 
   IpcHandler {
@@ -220,9 +224,7 @@ Panel {
       }
     }
     onPressed: function(buttonCode) {
-      if (buttonCode === Qt.RightButton) root.togglePause()
-      else if (buttonCode === Qt.MiddleButton) root.refresh()
-      else root.toggle()
+      if (buttonCode === Qt.LeftButton) root.toggle()
     }
   }
 
@@ -234,10 +236,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(400))
-    // childrenRect (actual laid-out height) rather than implicitHeight:
-    // mixed implicit/explicit child sizing can leave the positioner's
-    // implicitHeight at 0 while the real content height is not.
-    contentHeight: panel.fittedContentHeight(Math.max(column.childrenRect.height, column.implicitHeight))
+    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(560))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -245,31 +244,17 @@ Panel {
       blocked: emailField.activeFocus || localBaseField.activeFocus
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
-      onTextKey: function(t) {
-        if (t === "p" || t === "P") root.togglePause()
-        else if (t === "r" || t === "R") root.refresh()
-      }
 
-        Flickable {
-          id: panelFlick
-          anchors.fill: parent
-          contentWidth: width
-          contentHeight: Math.max(column.childrenRect.height, column.implicitHeight)
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
-        flickableDirection: Flickable.VerticalFlick
-        interactive: contentHeight > height
-
-        Column {
-          id: column
-          width: panelFlick.width
-          spacing: Style.space(12)
+      Column {
+        id: column
+        width: parent.width
+        spacing: Style.space(12)
 
           PanelHero {
             id: hero
             width: parent.width
             title: root.email !== "" ? root.email : "MEGA Sync"
-            meta: root.statusError !== "" && !root.status ? qsTr("Monitor belum berjalan")
+            meta: root.statusError !== "" && !root.status ? t("monitor_not_running")
               : root.metaLabel
             foreground: root.foreground
             fontFamily: root.fontFamily
@@ -282,49 +267,46 @@ Panel {
               }
             }
             trailingControl: Component {
-              ToggleSwitch {
-                id: pauseSwitch
-                checked: !root.allPaused
-                busy: false
-                hasCursor: false
-                foreground: hero.foreground
-                onHovered: function(on) {}
-                onToggled: root.togglePause()
+              Row {
+                spacing: Style.space(4)
 
-                PanelToolTip {
-                  visible: pauseSwitch.containsMouse
-                  text: root.allPaused ? qsTr("Lanjutkan semua sinkronisasi") : qsTr("Jeda semua sinkronisasi")
-                  fontFamily: hero.fontFamily
+                IconButton {
+                  iconName: "rotate-cw"
+                  tooltipText: t("tt_reload_status")
+                  foreground: root.foreground
+                  iconSize: Style.font.heading
+                  spinOnClick: true
+                  anchors.verticalCenter: parent.verticalCenter
+                  onClicked: root.refresh()
                 }
-              }
-            }
-          }
 
-          // Visible equivalents of the bar-icon right/middle clicks, so the
-          // panel works stand-alone without knowing the mouse shortcuts.
-          Item {
-            width: parent.width
-            height: actionRow.implicitHeight
+                IconButton {
+                  visible: root.loggedIn
+                  iconName: "log-out"
+                  tooltipText: t("tt_logout")
+                  foreground: root.foreground
+                  iconSize: Style.font.heading
+                  anchors.verticalCenter: parent.verticalCenter
+                  onClicked: root.runCtl("logout")
+                }
 
-            Row {
-              id: actionRow
-              anchors.right: parent.right
-              spacing: Style.space(4)
+                ToggleSwitch {
+                  id: pauseSwitch
+                  checked: !root.allPaused
+                  busy: false
+                  hasCursor: false
+                  foreground: Color.accent
+                  accent: Color.accent
+                  anchors.verticalCenter: parent.verticalCenter
+                  onHovered: function(on) {}
+                  onToggled: root.togglePause()
 
-              IconButton {
-                tooltipText: root.allPaused ? qsTr("Lanjutkan semua sinkronisasi") : qsTr("Jeda semua sinkronisasi")
-                foreground: root.foreground
-                iconSize: Style.font.body
-                iconComponent: root.allPaused ? playGlyph : pauseGlyph
-                onClicked: root.togglePause()
-              }
-
-              IconButton {
-                iconName: "rotate-cw"
-                tooltipText: qsTr("Muat ulang status")
-                foreground: root.foreground
-                iconSize: Style.font.body
-                onClicked: root.refresh()
+                  PanelToolTip {
+                    visible: pauseSwitch.containsMouse
+                    text: root.allPaused ? t("tt_resume_all") : t("tt_pause_all")
+                    fontFamily: hero.fontFamily
+                  }
+                }
               }
             }
           }
@@ -333,8 +315,8 @@ Panel {
             visible: root.broken
             width: parent.width
             text: root.syncState === "offline"
-              ? qsTr("Mesin MEGAcmd tidak merespons. Periksa: journalctl --user -u omaga-sync-engine")
-              : qsTr("Ada folder yang gagal disinkronkan. Periksa panel di bawah.")
+              ? t("server_offline_msg")
+              : t("folder_error_msg")
             color: root.urgentColor
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
@@ -344,155 +326,167 @@ Panel {
           // Login onboarding: MEGAcmd has no browser/OAuth flow, so the
           // button opens the default terminal with `mega-login <email>`
           // pre-filled; only the password and 2FA code are typed there.
-          Column {
+          Item {
             visible: root.needsAuth
             width: parent.width
-            spacing: Style.space(8)
+            height: visible ? loginSection.implicitHeight : 0
 
-            Text {
-              width: parent.width
-              text: qsTr("Sesi MEGA belum ada. Masukkan email, klik Login, lalu isi password dan kode 2FA di terminal yang terbuka:")
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              wrapMode: Text.WordWrap
-            }
-
-            RowLayout {
+            Column {
+              id: loginSection
               width: parent.width
               spacing: Style.space(8)
 
-              TextField {
-                id: emailField
-                Layout.fillWidth: true
-                placeholderText: qsTr("email MEGA Anda")
-                foreground: root.foreground
+              Text {
+                width: parent.width
+                text: t("login_prompt")
+                color: root.dim
                 font.family: root.fontFamily
-                inputMethodHints: Qt.ImhEmailCharactersOnly
-                onAccepted: root.runCtl("login", text)
-                Keys.onPressed: function(event) {
-                  if (event.key === Qt.Key_Escape) {
-                    keyCatcher.forceActiveFocus()
-                    event.accepted = true
-                  }
-                }
-                onActiveFocusChanged: if (!activeFocus) keyCatcher.forceActiveFocus()
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
               }
-            }
-
-            Rectangle {
-              id: loginRow
-              width: parent.width
-              height: loginInner.implicitHeight + Style.space(10)
-              radius: Style.cornerRadius
-              color: loginMouse.containsMouse
-                ? Style.hoverFillFor(root.foreground, Color.accent)
-                : "transparent"
 
               RowLayout {
-                id: loginInner
-                anchors.fill: parent
-                anchors.leftMargin: Style.space(8)
-                anchors.rightMargin: Style.space(8)
-                spacing: Style.space(10)
+                width: parent.width
+                spacing: Style.space(8)
 
-                LucideIcon {
-                Layout.alignment: Qt.AlignVCenter
-                name: "log-in"
-                iconSize: Style.font.heading
-                color: root.foreground
-              }
-
-                ColumnLayout {
+                TextField {
+                  id: emailField
                   Layout.fillWidth: true
-                  spacing: Style.space(1)
-
-                  Text {
-                    Layout.fillWidth: true
-                    text: qsTr("Login MEGA")
-                    color: root.foreground
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.body
-                    font.bold: true
+                  placeholderText: t("email_placeholder")
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  inputMethodHints: Qt.ImhEmailCharactersOnly
+                  onAccepted: root.runCtl("login", text)
+                  Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Escape) {
+                      keyCatcher.forceActiveFocus()
+                      event.accepted = true
+                    }
                   }
-
-                  Text {
-                    Layout.fillWidth: true
-                    text: qsTr("Buka terminal — tinggal ketik password dan kode 2FA")
-                    color: root.dim
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    elide: Text.ElideRight
-                  }
+                  onActiveFocusChanged: if (!activeFocus) keyCatcher.forceActiveFocus()
                 }
               }
 
-              MouseArea {
-                id: loginMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.runCtl("login", emailField.text)
-              }
-            }
+              Rectangle {
+                id: loginRow
+                width: parent.width
+                height: loginInner.implicitHeight + Style.space(10)
+                radius: Style.cornerRadius
+                color: loginMouse.containsMouse
+                  ? Style.hoverFillFor(root.foreground, Color.accent)
+                  : "transparent"
 
-            Text {
-              width: parent.width
-              text: qsTr("Atau manual di terminal: mega-cmd, lalu ketik: login email-anda")
-              color: Qt.darker(root.foreground, 1.9)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              wrapMode: Text.WordWrap
+                RowLayout {
+                  id: loginInner
+                  anchors.fill: parent
+                  anchors.leftMargin: Style.space(8)
+                  anchors.rightMargin: Style.space(8)
+                  spacing: Style.space(10)
+
+                  LucideIcon {
+                    Layout.alignment: Qt.AlignVCenter
+                    name: "log-in"
+                    iconSize: Style.font.heading
+                    color: root.foreground
+                  }
+
+                  ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.space(1)
+
+                    Text {
+                      Layout.fillWidth: true
+                      text: t("login_title")
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.body
+                      font.bold: true
+                    }
+
+                    Text {
+                      Layout.fillWidth: true
+                      text: t("login_subtitle")
+                      color: root.dim
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+                    }
+                  }
+                }
+
+                MouseArea {
+                  id: loginMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.runCtl("login", emailField.text)
+                }
+              }
+
+              Text {
+                width: parent.width
+                text: t("login_manual_hint")
+                color: Qt.darker(root.foreground, 1.9)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
+              }
             }
           }
 
           // Quota usage, same rail vocabulary as the clock's year bar.
-          Column {
+          Item {
             visible: root.totalBytes > 0
             width: parent.width
-            spacing: Style.space(6)
+            height: visible ? quotaSection.implicitHeight : 0
 
-            Item {
-              id: quotaHeader
+            Column {
+              id: quotaSection
               width: parent.width
-              height: Math.max(quotaLabel.implicitHeight, quotaValue.implicitHeight)
+              spacing: Style.space(6)
 
-              Text {
-                id: quotaLabel
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                text: qsTr("PENGGUNAAN")
-                color: Qt.darker(root.foreground, 1.5)
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                font.letterSpacing: 1
+              Item {
+                id: quotaHeader
+                width: parent.width
+                height: Math.max(quotaLabel.implicitHeight, quotaValue.implicitHeight)
+
+                Text {
+                  id: quotaLabel
+                  anchors.left: parent.left
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: t("sec_usage")
+                  color: Qt.darker(root.foreground, 1.5)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.letterSpacing: 1
+                }
+
+                Text {
+                  id: quotaValue
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: root.formatBytes(root.usedBytes) + " / " + root.formatBytes(root.totalBytes)
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
               }
-
-              Text {
-                id: quotaValue
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.formatBytes(root.usedBytes) + " / " + root.formatBytes(root.totalBytes)
-                color: root.foreground
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-              }
-            }
-
-            Rectangle {
-              width: parent.width
-              height: Style.space(6)
-              radius: Style.cornerRadius > 0 ? height / 2 : 0
-              color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12)
 
               Rectangle {
-                width: Math.round(parent.width * root.quotaFraction)
-                height: parent.height
-                radius: parent.radius
-                color: root.quotaFraction > 0.9 ? root.urgentColor
-                  : Style.selectedStateColor(root.foreground, Color.accent)
+                width: parent.width
+                height: Style.space(6)
+                radius: Style.cornerRadius > 0 ? height / 2 : 0
+                color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12)
 
-                Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                Rectangle {
+                  width: Math.round(parent.width * root.quotaFraction)
+                  height: parent.height
+                  radius: parent.radius
+                  color: root.quotaFraction > 0.9 ? root.urgentColor
+                    : Color.accent
+
+                  Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                }
               }
             }
           }
@@ -502,120 +496,129 @@ Panel {
             foreground: root.foreground
           }
 
-          Column {
+          Item {
             visible: root.pairs.length > 0 || root.syncState === "synced"
             width: parent.width
-            spacing: Style.space(8)
+            height: visible ? foldersSection.implicitHeight : 0
 
-            PanelSectionHeader {
-              text: qsTr("FOLDER")
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-            }
-
-            Text {
-              visible: root.pairs.length === 0 && !root.loggedIn
+            Column {
+              id: foldersSection
               width: parent.width
-              text: qsTr("Belum ada folder sync. Tambahkan dengan:\nmega-sync ~/Sync /Sync")
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              wrapMode: Text.WordWrap
-            }
+              spacing: Style.space(8)
 
-            Repeater {
-              model: root.pairs
+              PanelSectionHeader {
+                text: t("sec_folders")
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+              }
 
-              Rectangle {
-                id: pairRow
-                required property var modelData
-                readonly property string pairState: modelData ? String(modelData.state || "") : ""
-                readonly property bool pairPaused: pairState === "paused"
-                readonly property bool pairFailed: pairState === "error"
-
+              Text {
+                visible: root.pairs.length === 0 && !root.loggedIn
                 width: parent.width
-                height: pairInner.implicitHeight + Style.space(8)
-                radius: Style.cornerRadius
-                color: pairMouse.containsMouse
-                  ? Style.hoverFillFor(root.foreground, Color.accent)
-                  : "transparent"
+                text: t("no_folders")
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
 
-                RowLayout {
-                  id: pairInner
-                  anchors.fill: parent
-                  anchors.leftMargin: Style.space(8)
-                  anchors.rightMargin: Style.space(8)
-                  spacing: Style.space(8)
+              Repeater {
+                model: root.pairs
 
-                  LucideIcon {
-                    name: "folder"
-                    iconSize: Style.font.body
-                    color: pairRow.pairFailed ? root.urgentColor
-                      : pairRow.pairPaused ? Qt.darker(root.dim, 1.3) : root.dim
-                    Layout.alignment: Qt.AlignVCenter
+                Rectangle {
+                  id: pairRow
+                  required property var modelData
+                  readonly property string pairState: modelData ? String(modelData.state || "") : ""
+                  readonly property bool pairPaused: pairState === "paused"
+                  readonly property bool pairFailed: pairState === "error"
+
+                  width: parent.width
+                  height: pairInner.implicitHeight + Style.space(8)
+                  radius: Style.cornerRadius
+                  color: pairMouse.containsMouse
+                    ? Style.hoverFillFor(root.foreground, Color.accent)
+                    : "transparent"
+
+                  MouseArea {
+                    id: pairMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.openFolder(pairRow.modelData ? pairRow.modelData.local : "")
                   }
 
-                  ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.space(1)
+                  PanelToolTip {
+                    visible: pairMouse.containsMouse
+                    text: t("tt_open_folder")
+                    fontFamily: root.fontFamily
+                  }
 
-                    Text {
-                      Layout.fillWidth: true
-                      text: pairRow.modelData ? String(pairRow.modelData.local || "") : ""
-                      color: root.foreground
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.body
-                      elide: Text.ElideMiddle
+                  RowLayout {
+                    id: pairInner
+                    z: 1
+                    anchors.fill: parent
+                    anchors.leftMargin: Style.space(8)
+                    anchors.rightMargin: Style.space(8)
+                    spacing: Style.space(8)
+
+                    LucideIcon {
+                      name: "folder"
+                      iconSize: Style.font.heading
+                      color: pairRow.pairFailed ? root.urgentColor
+                        : pairRow.pairPaused ? Qt.darker(root.dim, 1.3) : Color.accent
+                      Layout.alignment: Qt.AlignVCenter
                     }
 
-                    Text {
+                    ColumnLayout {
                       Layout.fillWidth: true
-                      visible: text !== ""
-                      text: {
-                        if (!pairRow.modelData) return ""
-                        var detail = pairRow.modelData.error || ""
-                        return detail !== "" ? detail : root.pairStateLabel(pairRow.pairState)
+                      spacing: Style.space(1)
+
+                      Text {
+                        Layout.fillWidth: true
+                        text: pairRow.modelData ? String(pairRow.modelData.local || "") : ""
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.body
+                        elide: Text.ElideMiddle
                       }
-                      color: pairRow.pairFailed ? root.urgentColor : root.dim
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.caption
-                      elide: Text.ElideRight
+
+                      Text {
+                        Layout.fillWidth: true
+                        visible: text !== ""
+                        text: {
+                          if (!pairRow.modelData) return ""
+                          var detail = String(pairRow.modelData.error || "").trim()
+                          if (pairRow.pairFailed && detail !== "" && detail.toUpperCase() !== "NO") return detail
+                          return root.pairStateLabel(pairRow.pairState)
+                        }
+                        color: pairRow.pairFailed ? root.urgentColor : root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        elide: Text.ElideRight
+                      }
+                    }
+
+                    IconButton {
+                      tooltipText: pairRow.pairPaused ? t("tt_resume_folder") : t("tt_pause_folder")
+                      foreground: root.foreground
+                      iconSize: Style.font.heading
+                      iconComponent: pairRow.pairPaused ? playGlyph : pauseGlyph
+                      Layout.alignment: Qt.AlignVCenter
+                      onClicked: root.runCtl(pairRow.pairPaused ? "resume" : "pause",
+                                             pairRow.modelData ? pairRow.modelData.local : "")
+                    }
+
+                    IconButton {
+                      iconName: "trash-2"
+                      tooltipText: t("tt_remove_sync")
+                      foreground: root.foreground
+                      iconSize: Style.font.heading
+                      Layout.alignment: Qt.AlignVCenter
+                      onClicked: root.runCtl("remove",
+                                             pairRow.modelData ? pairRow.modelData.local : "")
                     }
                   }
 
-                  IconButton {
-                    tooltipText: pairRow.pairPaused ? qsTr("Lanjutkan folder ini") : qsTr("Jeda folder ini")
-                    foreground: root.foreground
-                    iconSize: Style.font.body
-                    iconComponent: pairRow.pairPaused ? playGlyph : pauseGlyph
-                    Layout.alignment: Qt.AlignVCenter
-                    onClicked: root.runCtl(pairRow.pairPaused ? "resume" : "pause",
-                                           pairRow.modelData ? pairRow.modelData.local : "")
-                  }
-
-                  IconButton {
-                    iconName: "trash-2"
-                    tooltipText: qsTr("Hapus sync ini (file tetap aman)")
-                    foreground: root.foreground
-                    iconSize: Style.font.body
-                    Layout.alignment: Qt.AlignVCenter
-                    onClicked: root.runCtlArgs(["remove",
-                                               pairRow.modelData ? pairRow.modelData.local : ""])
-                  }
-                }
-
-                MouseArea {
-                  id: pairMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: root.openFolder(pairRow.modelData ? pairRow.modelData.local : "")
-                }
-
-                PanelToolTip {
-                  visible: pairMouse.containsMouse
-                  text: qsTr("Buka folder")
-                  fontFamily: root.fontFamily
                 }
               }
             }
@@ -639,26 +642,11 @@ Panel {
               anchors.rightMargin: Style.space(8)
               spacing: Style.space(10)
 
-              Item {
+              LucideIcon {
                 Layout.alignment: Qt.AlignVCenter
-                implicitWidth: plusIconSize
-                implicitHeight: plusIconSize
-                readonly property real plusIconSize: Style.font.heading
-
-                Rectangle {
-                  anchors.centerIn: parent
-                  width: parent.width * 0.62
-                  height: Math.max(2, parent.height * 0.1)
-                  radius: height / 2
-                  color: root.foreground
-                }
-                Rectangle {
-                  anchors.centerIn: parent
-                  width: Math.max(2, parent.width * 0.1)
-                  height: parent.height * 0.62
-                  radius: width / 2
-                  color: root.foreground
-                }
+                name: "plus"
+                iconSize: Style.font.heading
+                color: root.foreground
               }
 
               ColumnLayout {
@@ -667,7 +655,7 @@ Panel {
 
                 Text {
                   Layout.fillWidth: true
-                  text: qsTr("Tambah sinkronisasi")
+                  text: t("add_sync")
                   color: root.foreground
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.body
@@ -676,7 +664,7 @@ Panel {
 
                 Text {
                   Layout.fillWidth: true
-                  text: qsTr("Pilih folder dari akun MEGA Anda")
+                  text: t("add_sync_desc")
                   color: root.dim
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
@@ -696,187 +684,186 @@ Panel {
 
           // Pick-to-sync: the chosen MEGA folder's CONTENTS land directly in
           // the base folder (~/MEGA by default) — same as the desktop app.
-          Column {
+          Item {
+            id: pickContainer
             visible: root.loggedIn && root.addMode
             width: parent.width
-            spacing: Style.space(8)
+            height: visible ? pickSection.implicitHeight : 0
+            clip: true
 
-            RowLayout {
+            Column {
+              id: pickSection
               width: parent.width
               spacing: Style.space(8)
 
+              RowLayout {
+                width: parent.width
+                spacing: Style.space(8)
+
+                Text {
+                  text: t("dest_label")
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  Layout.alignment: Qt.AlignVCenter
+                }
+
+                TextField {
+                  id: localBaseField
+                  Layout.fillWidth: true
+                  text: "MEGA"
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Escape) {
+                      keyCatcher.forceActiveFocus()
+                      event.accepted = true
+                    }
+                  }
+                  onActiveFocusChanged: if (!activeFocus) keyCatcher.forceActiveFocus()
+                }
+
+                IconButton {
+                  iconName: "rotate-cw"
+                  tooltipText: t("tt_reload_folder_list")
+                  foreground: root.foreground
+                  iconSize: Style.font.heading
+                  spinOnClick: true
+                  Layout.alignment: Qt.AlignVCenter
+                  onClicked: root.refresh()
+                }
+              }
+
               Text {
-                text: qsTr("Isi folder masuk ke:")
+                visible: root.remoteFolders.length === 0
+                width: parent.width
+                text: t("loading_folders")
                 color: root.dim
                 font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                Layout.alignment: Qt.AlignVCenter
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
               }
 
-              TextField {
-                id: localBaseField
-                Layout.fillWidth: true
-                text: "MEGA"
-                foreground: root.foreground
-                font.family: root.fontFamily
-                Keys.onPressed: function(event) {
-                  if (event.key === Qt.Key_Escape) {
-                    keyCatcher.forceActiveFocus()
-                    event.accepted = true
-                  }
-                }
-                onActiveFocusChanged: if (!activeFocus) keyCatcher.forceActiveFocus()
-              }
-
-              IconButton {
-                iconName: "rotate-cw"
-                tooltipText: qsTr("Muat ulang daftar folder")
-                foreground: root.foreground
-                iconSize: Style.font.body
-                Layout.alignment: Qt.AlignVCenter
-                onClicked: root.refresh()
-              }
-            }
-
-            Text {
-              visible: root.remoteFolders.length === 0
-              width: parent.width
-              text: qsTr("Daftar folder MEGA sedang dimuat… (menyusul dalam ±1 menit)")
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              wrapMode: Text.WordWrap
-            }
-
-            // Folder list capped at ~4 rows with internal scrolling so the
-            // popup height stays stable no matter how many folders exist.
-            Flickable {
-              width: parent.width
-              height: Math.min(pickColumn.implicitHeight, Style.space(216))
-              contentWidth: width
-              contentHeight: pickColumn.implicitHeight
-              clip: true
-              boundsBehavior: Flickable.StopAtBounds
-              flickableDirection: Flickable.VerticalFlick
-              interactive: contentHeight > height
-              ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-
-              Column {
-                id: pickColumn
+              // Scrollable remote folder list — capped height with smooth internal scrolling
+              // so the top controls (Hero, Quota, Folders, and input) stay sticky at the top.
+              Flickable {
+                id: pickFlick
                 width: parent.width
-                spacing: Style.space(4)
+                height: Math.min(pickColumn.implicitHeight, Style.space(220))
+                contentWidth: width
+                contentHeight: pickColumn.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                flickableDirection: Flickable.VerticalFlick
+                interactive: contentHeight > height
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-                Repeater {
-                  model: root.remoteFolders
+                Column {
+                  id: pickColumn
+                  width: parent.width
+                  spacing: Style.space(4)
 
-              Rectangle {
-                id: pickRow
-                required property string modelData
-                readonly property string pickState: root.pickState(modelData)
-                readonly property bool pickable: pickState === "available"
+                  Repeater {
+                    model: root.remoteFolders
 
-                width: parent.width
-                height: pickInner.implicitHeight + Style.space(8)
-                radius: Style.cornerRadius
-                color: pickMouse.containsMouse && pickable
-                  ? Style.hoverFillFor(root.foreground, Color.accent)
-                  : "transparent"
-                opacity: pickable ? 1.0 : (pickState === "synced" ? 0.5 : 0.35)
+                    Rectangle {
+                      id: pickRow
+                      required property string modelData
+                      readonly property string pickState: root.pickState(modelData)
+                      readonly property bool pickable: pickState === "available"
 
-                RowLayout {
-                  id: pickInner
-                  anchors.fill: parent
-                  anchors.leftMargin: Style.space(8)
-                  anchors.rightMargin: Style.space(8)
-                  spacing: Style.space(8)
+                      width: parent.width
+                      height: pickInner.implicitHeight + Style.space(8)
+                      radius: Style.cornerRadius
+                      color: pickMouse.containsMouse && pickable
+                        ? Style.hoverFillFor(root.foreground, Color.accent)
+                        : "transparent"
+                      opacity: pickRow.pickState === "synced" ? 1.0 : (pickable ? 1.0 : 0.4)
 
-                  LucideIcon {
-                    name: "folder"
-                    iconSize: Style.font.body
-                    color: root.dim
-                    Layout.alignment: Qt.AlignVCenter
-                  }
+                      RowLayout {
+                        id: pickInner
+                        anchors.fill: parent
+                        anchors.leftMargin: Style.space(8)
+                        anchors.rightMargin: Style.space(8)
+                        spacing: Style.space(8)
 
-                  ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.space(1)
+                        LucideIcon {
+                          name: "folder"
+                          iconSize: Style.font.heading
+                          color: pickRow.pickState === "synced" ? Color.accent : (pickRow.pickable ? root.foreground : root.dim)
+                          Layout.alignment: Qt.AlignVCenter
+                        }
 
-                    Text {
-                      Layout.fillWidth: true
-                      text: pickRow.modelData
-                      color: root.foreground
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.body
-                      elide: Text.ElideMiddle
-                    }
+                        ColumnLayout {
+                          Layout.fillWidth: true
+                          spacing: Style.space(1)
 
-                    Text {
-                      Layout.fillWidth: true
-                      text: {
-                        if (pickRow.pickState === "synced") return qsTr("sedang disinkronkan")
-                        if (pickRow.pickState === "taken") return qsTr("folder lokal dipakai sync lain")
-                        return root.home + "/" + localBaseField.text
+                          Text {
+                            Layout.fillWidth: true
+                            text: pickRow.modelData
+                            color: root.foreground
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.body
+                            elide: Text.ElideMiddle
+                          }
+
+                          Text {
+                            Layout.fillWidth: true
+                            text: {
+                              if (pickRow.pickState === "synced") return t("pick_already_synced")
+                              if (pickRow.pickState === "taken") return t("pick_local_used")
+                              return root.home + "/" + localBaseField.text
+                            }
+                            color: pickRow.pickState === "synced" ? root.foreground : (pickRow.pickState === "available" ? root.foreground : root.dim)
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideMiddle
+                          }
+                        }
+
+                        LucideIcon {
+                          visible: pickRow.pickState !== "available"
+                          name: pickRow.pickState === "synced" ? "cloud" : "cloud-off"
+                          iconSize: Style.font.heading
+                          color: pickRow.pickState === "synced" ? Color.accent : root.dim
+                          Layout.alignment: Qt.AlignVCenter
+                        }
                       }
-                      color: pickRow.pickState === "available" ? root.dim : Qt.darker(root.dim, 1.2)
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.caption
-                      elide: Text.ElideMiddle
+
+                      MouseArea {
+                        id: pickMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: pickRow.pickable ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        enabled: pickRow.pickable
+                        onClicked: {
+                          root.runCtlArgs(["add", pickRow.modelData, localBaseField.text])
+                          root.addMode = false
+                        }
+                      }
+
+                      PanelToolTip {
+                        visible: pickMouse.containsMouse && pickRow.pickable
+                        text: t("tt_sync_contents")
+                        fontFamily: root.fontFamily
+                      }
                     }
                   }
-
-                  LucideIcon {
-                    visible: pickRow.pickState !== "available"
-                    name: pickRow.pickState === "synced" ? "cloud" : "cloud-off"
-                    iconSize: Style.font.body
-                    color: root.dim
-                    Layout.alignment: Qt.AlignVCenter
-                  }
-                }
-
-                MouseArea {
-                  id: pickMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: pickRow.pickable ? Qt.PointingHandCursor : Qt.ArrowCursor
-                  enabled: pickRow.pickable
-                  onClicked: {
-                    root.runCtlArgs(["add", pickRow.modelData, localBaseField.text])
-                    root.addMode = false
-                  }
-                }
-
-                PanelToolTip {
-                  visible: pickMouse.containsMouse && pickRow.pickable
-                  text: qsTr("Sinkronkan isi folder ini")
-                  fontFamily: root.fontFamily
-                }
                 }
               }
             }
           }
-          }
 
-          Text {
-            width: parent.width
-            text: qsTr("Klik kanan ikon bar: jeda/lanjut semua")
-            color: Qt.darker(root.foreground, 1.9)
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            wrapMode: Text.WordWrap
-          }
         }
       }
     }
-  }
 
   // Filled pause/play glyphs: outline glyphs read as muddled at these sizes,
   // so solid shapes are drawn directly.
   component FilledPause: Item {
     id: glyph
     property color color: "#ffffff"
-    property real iconSize: 14
-    implicitWidth: iconSize
-    implicitHeight: iconSize
+    property real iconSize: Style.font.heading
     width: iconSize
     height: iconSize
 
@@ -899,9 +886,7 @@ Panel {
   component FilledPlay: Item {
     id: glyph
     property color color: "#ffffff"
-    property real iconSize: 14
-    implicitWidth: iconSize * 0.85
-    implicitHeight: iconSize
+    property real iconSize: Style.font.heading
     width: iconSize * 0.85
     height: iconSize
 
@@ -928,11 +913,11 @@ Panel {
 
   Component {
     id: pauseGlyph
-    FilledPause { color: root.foreground; iconSize: Style.font.body }
+    FilledPause { color: root.foreground; iconSize: Style.font.heading }
   }
 
   Component {
     id: playGlyph
-    FilledPlay { color: root.foreground; iconSize: Style.font.body }
+    FilledPlay { color: root.foreground; iconSize: Style.font.heading }
   }
 }
