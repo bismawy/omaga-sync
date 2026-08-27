@@ -33,9 +33,11 @@ Item {
           .replace(/currentColor/g, hexOf(color)))
     : ""
 
+  readonly property string _safeName: /^[a-z0-9-]+$/.test(root.name) ? root.name : ""
+
   FileView {
     id: svgFile
-    path: root.name !== "" ? Qt.resolvedUrl("icons/" + root.name + ".svg") : ""
+    path: root._safeName !== "" ? Qt.resolvedUrl("icons/" + root._safeName + ".svg") : ""
     printErrors: false
     watchChanges: false
     onLoaded: root._raw = text()

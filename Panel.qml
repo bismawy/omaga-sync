@@ -74,9 +74,24 @@ Panel {
   readonly property color heroColor: broken ? urgentColor : (allPaused ? dim : foreground)
 
   function parseStatusText(raw) {
+    var str = String(raw || "")
+    if (str.length === 0) return
+    if (str.length > 65536) {
+      statusError = "Status data exceeded size limit"
+      return
+    }
     try {
-      status = JSON.parse(String(raw))
-      statusError = ""
+      var parsed = JSON.parse(str)
+      if (parsed && typeof parsed === "object") {
+        if (parsed.pairs instanceof Array && parsed.pairs.length > 50) {
+          parsed.pairs = parsed.pairs.slice(0, 50)
+        }
+        if (parsed.remoteFolders instanceof Array && parsed.remoteFolders.length > 100) {
+          parsed.remoteFolders = parsed.remoteFolders.slice(0, 100)
+        }
+        status = parsed
+        statusError = ""
+      }
     } catch (e) {
       statusError = String(e)
     }
@@ -314,6 +329,7 @@ Panel {
           Text {
             visible: root.broken
             width: parent.width
+            textFormat: Text.PlainText
             text: root.syncState === "offline"
               ? t("server_offline_msg")
               : t("folder_error_msg")
@@ -338,6 +354,7 @@ Panel {
 
               Text {
                 width: parent.width
+                textFormat: Text.PlainText
                 text: t("login_prompt")
                 color: root.dim
                 font.family: root.fontFamily
@@ -396,6 +413,7 @@ Panel {
 
                     Text {
                       Layout.fillWidth: true
+                      textFormat: Text.PlainText
                       text: t("login_title")
                       color: root.foreground
                       font.family: root.fontFamily
@@ -405,6 +423,7 @@ Panel {
 
                     Text {
                       Layout.fillWidth: true
+                      textFormat: Text.PlainText
                       text: t("login_subtitle")
                       color: root.dim
                       font.family: root.fontFamily
@@ -425,6 +444,7 @@ Panel {
 
               Text {
                 width: parent.width
+                textFormat: Text.PlainText
                 text: t("login_manual_hint")
                 color: Qt.darker(root.foreground, 1.9)
                 font.family: root.fontFamily
@@ -454,6 +474,7 @@ Panel {
                   id: quotaLabel
                   anchors.left: parent.left
                   anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
                   text: t("sec_usage")
                   color: Qt.darker(root.foreground, 1.5)
                   font.family: root.fontFamily
@@ -465,6 +486,7 @@ Panel {
                   id: quotaValue
                   anchors.right: parent.right
                   anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
                   text: root.formatBytes(root.usedBytes) + " / " + root.formatBytes(root.totalBytes)
                   color: root.foreground
                   font.family: root.fontFamily
@@ -515,6 +537,7 @@ Panel {
               Text {
                 visible: root.pairs.length === 0 && !root.loggedIn
                 width: parent.width
+                textFormat: Text.PlainText
                 text: t("no_folders")
                 color: root.dim
                 font.family: root.fontFamily
@@ -575,6 +598,7 @@ Panel {
 
                       Text {
                         Layout.fillWidth: true
+                        textFormat: Text.PlainText
                         text: pairRow.modelData ? String(pairRow.modelData.local || "") : ""
                         color: root.foreground
                         font.family: root.fontFamily
@@ -585,6 +609,7 @@ Panel {
                       Text {
                         Layout.fillWidth: true
                         visible: text !== ""
+                        textFormat: Text.PlainText
                         text: {
                           if (!pairRow.modelData) return ""
                           var detail = String(pairRow.modelData.error || "").trim()
@@ -655,6 +680,7 @@ Panel {
 
                 Text {
                   Layout.fillWidth: true
+                  textFormat: Text.PlainText
                   text: t("add_sync")
                   color: root.foreground
                   font.family: root.fontFamily
@@ -664,6 +690,7 @@ Panel {
 
                 Text {
                   Layout.fillWidth: true
+                  textFormat: Text.PlainText
                   text: t("add_sync_desc")
                   color: root.dim
                   font.family: root.fontFamily
@@ -701,6 +728,7 @@ Panel {
                 spacing: Style.space(8)
 
                 Text {
+                  textFormat: Text.PlainText
                   text: t("dest_label")
                   color: root.dim
                   font.family: root.fontFamily
@@ -737,6 +765,7 @@ Panel {
               Text {
                 visible: root.remoteFolders.length === 0
                 width: parent.width
+                textFormat: Text.PlainText
                 text: t("loading_folders")
                 color: root.dim
                 font.family: root.fontFamily
@@ -800,6 +829,7 @@ Panel {
 
                           Text {
                             Layout.fillWidth: true
+                            textFormat: Text.PlainText
                             text: pickRow.modelData
                             color: root.foreground
                             font.family: root.fontFamily
@@ -809,6 +839,7 @@ Panel {
 
                           Text {
                             Layout.fillWidth: true
+                            textFormat: Text.PlainText
                             text: {
                               if (pickRow.pickState === "synced") return t("pick_already_synced")
                               if (pickRow.pickState === "taken") return t("pick_local_used")
