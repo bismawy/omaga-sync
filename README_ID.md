@@ -10,6 +10,12 @@
 
 ---
 
+<p align="center">
+  <img src="preview.png" alt="Omaga Sync Preview" width="400" />
+</p>
+
+---
+
 **Omaga Sync** adalah integrasi sinkronisasi dua arah resmi [MEGAcmd](https://github.com/meganz/MEGAcmd) untuk desktop environment **Omarchy** (Quickshell / Wayland / Hyprland). Dirancang sebagai pengganti headless yang ringan, andal, dan bebas bug rendering tampilan desktop app bawaan di Wayland.
 
 ## Arsitektur
