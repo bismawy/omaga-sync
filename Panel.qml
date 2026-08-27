@@ -298,7 +298,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(400))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(640))
+    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(700))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -610,6 +610,7 @@ Panel {
                 id: activityFlick
                 width: parent.width
                 height: Math.min(activityColumn.implicitHeight, Style.space(170))
+                implicitHeight: height
                 contentWidth: width
                 contentHeight: activityColumn.implicitHeight
                 clip: true
@@ -752,68 +753,73 @@ Panel {
                   width: parent.width
                   height: pairInner.implicitHeight + Style.space(8)
                   radius: Style.cornerRadius
-                  color: pairMouse.containsMouse
+                  color: folderClickArea.containsMouse
                     ? Style.hoverFillFor(root.foreground, Color.accent)
                     : "transparent"
 
-                  MouseArea {
-                    id: pairMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.openFolder(pairRow.modelData ? pairRow.modelData.local : "")
-                  }
-
-                  PanelToolTip {
-                    visible: pairMouse.containsMouse
-                    text: t("tt_open_folder")
-                    fontFamily: root.fontFamily
-                  }
-
                   RowLayout {
                     id: pairInner
-                    z: 1
                     anchors.fill: parent
                     anchors.leftMargin: Style.space(8)
                     anchors.rightMargin: Style.space(8)
                     spacing: Style.space(8)
 
-                    LucideIcon {
-                      name: "folder"
-                      iconSize: Style.font.heading
-                      color: pairRow.pairFailed ? root.urgentColor
-                        : pairRow.pairPaused ? Qt.darker(root.dim, 1.3) : Color.accent
-                      Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    ColumnLayout {
+                    MouseArea {
+                      id: folderClickArea
                       Layout.fillWidth: true
-                      spacing: Style.space(1)
+                      Layout.fillHeight: true
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: root.openFolder(pairRow.modelData ? String(pairRow.modelData.local || "") : "")
 
-                      Text {
-                        Layout.fillWidth: true
-                        textFormat: Text.PlainText
-                        text: pairRow.modelData ? String(pairRow.modelData.local || "") : ""
-                        color: root.foreground
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.body
-                        elide: Text.ElideMiddle
+                      PanelToolTip {
+                        visible: folderClickArea.containsMouse
+                        text: t("tt_open_folder")
+                        fontFamily: root.fontFamily
                       }
 
-                      Text {
-                        Layout.fillWidth: true
-                        visible: text !== ""
-                        textFormat: Text.PlainText
-                        text: {
-                          if (!pairRow.modelData) return ""
-                          var detail = String(pairRow.modelData.error || "").trim()
-                          if (pairRow.pairFailed && detail !== "" && detail.toUpperCase() !== "NO") return detail
-                          return root.pairStateLabel(pairRow.pairState)
+                      RowLayout {
+                        anchors.fill: parent
+                        spacing: Style.space(8)
+
+                        LucideIcon {
+                          name: "folder"
+                          iconSize: Style.font.heading
+                          color: pairRow.pairFailed ? root.urgentColor
+                            : pairRow.pairPaused ? Qt.darker(root.dim, 1.3) : Color.accent
+                          Layout.alignment: Qt.AlignVCenter
                         }
-                        color: pairRow.pairFailed ? root.urgentColor : root.foreground
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.caption
-                        elide: Text.ElideRight
+
+                        ColumnLayout {
+                          Layout.fillWidth: true
+                          spacing: Style.space(1)
+
+                          Text {
+                            Layout.fillWidth: true
+                            textFormat: Text.PlainText
+                            text: pairRow.modelData ? String(pairRow.modelData.local || "") : ""
+                            color: root.foreground
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.body
+                            elide: Text.ElideMiddle
+                          }
+
+                          Text {
+                            Layout.fillWidth: true
+                            visible: text !== ""
+                            textFormat: Text.PlainText
+                            text: {
+                              if (!pairRow.modelData) return ""
+                              var detail = String(pairRow.modelData.error || "").trim()
+                              if (pairRow.pairFailed && detail !== "" && detail.toUpperCase() !== "NO") return detail
+                              return root.pairStateLabel(pairRow.pairState)
+                            }
+                            color: pairRow.pairFailed ? root.urgentColor : root.foreground
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideRight
+                          }
+                        }
                       }
                     }
 
@@ -837,7 +843,6 @@ Panel {
                                              pairRow.modelData ? pairRow.modelData.local : "")
                     }
                   }
-
                 }
               }
             }
@@ -973,6 +978,7 @@ Panel {
                 id: pickFlick
                 width: parent.width
                 height: Math.min(pickColumn.implicitHeight, Style.space(220))
+                implicitHeight: height
                 contentWidth: width
                 contentHeight: pickColumn.implicitHeight
                 clip: true
