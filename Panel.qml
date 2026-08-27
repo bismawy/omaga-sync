@@ -9,7 +9,7 @@ import "I18n.js" as I18n
 
 // Omaga Sync — MEGA two-way sync in the Omarchy bar.
 //
-// The official MEGAcmd engine (systemd unit omaga-sync-engine) does the
+// The MEGAcmd engine (systemd unit omaga-sync-engine) does the
 // syncing; ~/.local/bin/omaga-sync monitor keeps status.json fresh; this
 // widget only reads that file (file-watch driven) and routes actions back
 // through the omaga-sync control command.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Omaga Sync — MEGA two-way sync monitor & control for Omarchy.
 
-Engine: official MEGAcmd server (mega-cmd-server), supervised by systemd
+Engine: MEGAcmd server (mega-cmd-server), supervised by systemd
 as omaga-sync-engine.service. This script keeps the derived status file
 fresh and exposes small control commands for the bar widget.
 

@@ -16,12 +16,12 @@
 
 ---
 
-**Omaga Sync** adalah integrasi sinkronisasi dua arah resmi [MEGAcmd](https://github.com/meganz/MEGAcmd) untuk desktop environment **Omarchy** (Quickshell / Wayland / Hyprland). Dirancang sebagai pengganti headless yang ringan, andal, dan bebas bug rendering tampilan desktop app bawaan di Wayland.
+**Omaga Sync** adalah widget dan monitor sinkronisasi dua arah MEGA untuk desktop environment **Omarchy** (Quickshell / Wayland / Hyprland), ditenagai oleh mesin [MEGAcmd](https://github.com/meganz/MEGAcmd). Dirancang sebagai pengganti headless yang ringan, andal, dan bebas bug rendering tampilan desktop app bawaan di Wayland.
 
 ## Arsitektur
 
 ```text
-mega-cmd-server ── systemd (omaga-sync-engine.service)     Mesin sync resmi MEGAcmd
+mega-cmd-server ── systemd (omaga-sync-engine.service)     Mesin sync MEGAcmd (mega-cmd-server)
       │ Socket lokal
 omaga-sync monitor ── systemd (omaga-sync-monitor.service) Polling 5s → status.json
       │ File-watch                                              └─ notify-send saat error

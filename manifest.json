@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "bisma",
   "license": "MIT",
-  "description": "MEGA two-way sync status and control in the Omarchy bar, powered by the official MEGAcmd engine.",
+  "description": "MEGA two-way sync status and control in the Omarchy bar, powered by the MEGAcmd engine.",
   "kinds": [
     "bar-widget"
   ],
