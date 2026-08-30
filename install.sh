@@ -12,7 +12,9 @@ UNIT_DST="$HOME/.config/systemd/user"
 plugin_only=0
 [[ "${1:-}" == "--plugin-only" ]] && plugin_only=1
 
-mkdir -p "$PLUGIN_DST" "$HOME/.local/bin" "$UNIT_DST" "$HOME/.local/state/omaga-sync"
+mkdir -p "$PLUGIN_DST" "$HOME/.local/bin" "$UNIT_DST" "$HOME/.local/state/omaga-sync" \
+  "$HOME/.local/share/nautilus-python/extensions" \
+  "$HOME/.local/share/icons/hicolor/scalable/emblems"
 
 # The plugin loader rejects symlinks, so always copy.
 install -m 644 "$SRC_DIR/manifest.json" "$PLUGIN_DST/manifest.json"
@@ -39,6 +41,16 @@ install -m 755 "$SRC_DIR/omaga-sync" "$BIN_DST"
 install -m 755 "$SRC_DIR/omaga-login" "$HOME/.local/bin/omaga-login"
 install -m 644 "$SRC_DIR/omaga-sync-engine.service" "$UNIT_DST/"
 install -m 644 "$SRC_DIR/omaga-sync-monitor.service" "$UNIT_DST/"
+
+# Nautilus emblems (GNOME Files sync-status badges).
+if command -v nautilus >/dev/null 2>&1 && python3 -c "import gi; gi.require_version('Nautilus','4.1')" >/dev/null 2>&1; then
+  install -m 644 "$SRC_DIR/nautilus/omaga-sync-emblems.py" \
+    "$HOME/.local/share/nautilus-python/extensions/omaga-sync-emblems.py"
+  install -m 644 "$SRC_DIR"/nautilus/icons/*.svg \
+    "$HOME/.local/share/icons/hicolor/scalable/emblems/"
+  gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+  nautilus -q >/dev/null 2>&1 || true
+fi
 
 # Any mega-* call may have auto-spawned an unsupervised server; it would
 # keep the socket so the systemd unit can never bind. Kill it first.
