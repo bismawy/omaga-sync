@@ -71,7 +71,7 @@ PAIR_EMBLEMS = {
 }
 EMBLEM_TRANSFER = "emblem-omaga-transfer"
 EMBLEM_WALK_EVERY_TICKS = 6  # full tree re-walk interval (~30s)
-MAX_EMBLEM_PATHS = 20000  # ponytail: raise if giant trees need full coverage
+MAX_EMBLEM_PATHS = 60000  # ponytail: raise if giant trees need full coverage
 MAX_STR_LEN = 256
 MAX_STATUS_JSON_BYTES = 64 * 1024
 
