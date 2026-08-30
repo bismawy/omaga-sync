@@ -1,8 +1,8 @@
 import QtQuick
 import Quickshell.Io
 
-// Lucide SVG icon (icons/<name>.svg), recolored to the active theme without
-// extra modules: the SVG text is loaded, its currentColor strokes are
+// Material Symbols SVG icon (icons/<name>.svg), recolored to the active theme
+// without extra modules: the SVG text is loaded, its currentColor fills are
 // rewritten to the requested color, and the result is fed to Image as a
 // data URL. Qt rasterizes SVG sources at sourceSize, so icons stay crisp.
 Item {

@@ -362,7 +362,7 @@ Panel {
     bar: root.bar
     iconComponent: Component {
       Item {
-        LucideIcon {
+        MaterialIcon {
           anchors.centerIn: parent
           name: "folder-m"
           iconSize: Style.bar.iconCanvas
@@ -415,7 +415,7 @@ Panel {
             fontFamily: root.fontFamily
             iconOpacity: root.broken ? 1.0 : (root.allPaused ? 0.5 : 1.0)
             iconComponent: Component {
-              LucideIcon {
+              MaterialIcon {
                 name: "folder-m"
                 iconSize: Style.font.display
                 color: root.heroColor
@@ -426,7 +426,7 @@ Panel {
                 spacing: Style.space(4)
 
                 IconButton {
-                  iconName: "rotate-cw"
+                  iconName: "refresh"
                   tooltipText: t("tt_reload_status")
                   foreground: root.foreground
                   iconSize: Style.font.heading
@@ -437,7 +437,7 @@ Panel {
 
                 IconButton {
                   visible: root.loggedIn
-                  iconName: "log-out"
+                  iconName: "logout"
                   tooltipText: t("tt_logout")
                   foreground: root.foreground
                   iconSize: Style.font.heading
@@ -540,9 +540,9 @@ Panel {
                   anchors.rightMargin: Style.space(8)
                   spacing: Style.space(10)
 
-                  LucideIcon {
+                  MaterialIcon {
                     Layout.alignment: Qt.AlignVCenter
-                    name: "log-in"
+                    name: "login"
                     iconSize: Style.font.heading
                     color: root.foreground
                   }
@@ -743,8 +743,8 @@ Panel {
                         anchors.rightMargin: Style.space(8)
                         spacing: Style.space(8)
 
-                        LucideIcon {
-                          name: transferRow.modelData && transferRow.modelData.type === "upload" ? "cloud-upload" : "cloud-download"
+                        MaterialIcon {
+                          name: transferRow.modelData && transferRow.modelData.type === "upload" ? "cloud_upload" : "cloud_download"
                           iconSize: Style.font.heading
                           color: transferRow.modelData && transferRow.modelData.state === "retrying" ? root.urgentColor : Color.accent
                           Layout.alignment: Qt.AlignVCenter
@@ -897,7 +897,7 @@ Panel {
                           implicitWidth: Style.font.heading
                           implicitHeight: Style.font.heading
 
-                          LucideIcon {
+                          MaterialIcon {
                             anchors.fill: parent
                             name: "folder"
                             iconSize: Style.font.heading
@@ -906,13 +906,13 @@ Panel {
                           }
 
                           // Transfer emblem, like a Nautilus symlink badge.
-                          LucideIcon {
+                          MaterialIcon {
                             visible: pairRow.pairTransfers.length > 0
                             anchors.right: parent.right
                             anchors.bottom: parent.bottom
                             anchors.rightMargin: -Style.space(3)
                             anchors.bottomMargin: -Style.space(3)
-                            name: "rotate-cw"
+                            name: "refresh"
                             iconSize: Math.max(10, Math.round(Style.font.heading * 0.55))
                             color: Color.accent
 
@@ -977,7 +977,7 @@ Panel {
                     }
 
                     IconButton {
-                      iconName: "trash-2"
+                      iconName: "delete"
                       tooltipText: t("tt_remove_sync")
                       foreground: root.foreground
                       iconSize: Style.font.heading
@@ -1009,9 +1009,9 @@ Panel {
               anchors.rightMargin: Style.space(8)
               spacing: Style.space(10)
 
-              LucideIcon {
+              MaterialIcon {
                 Layout.alignment: Qt.AlignVCenter
-                name: "plus"
+                name: "add"
                 iconSize: Style.font.heading
                 color: root.foreground
               }
@@ -1094,7 +1094,7 @@ Panel {
                 }
 
                 IconButton {
-                  iconName: "rotate-cw"
+                  iconName: "refresh"
                   tooltipText: t("tt_reload_folder_list")
                   foreground: root.foreground
                   iconSize: Style.font.heading
@@ -1159,7 +1159,7 @@ Panel {
                         anchors.rightMargin: Style.space(8)
                         spacing: Style.space(8)
 
-                        LucideIcon {
+                        MaterialIcon {
                           name: "folder"
                           iconSize: Style.font.heading
                           color: pickRow.pickState === "synced" ? Color.accent : (pickRow.pickable ? root.foreground : root.dim)
@@ -1195,9 +1195,9 @@ Panel {
                           }
                         }
 
-                        LucideIcon {
+                        MaterialIcon {
                           visible: pickRow.pickState === "synced" || !pickRow.pickable
-                          name: pickRow.pickState === "synced" ? "cloud" : "cloud-off"
+                          name: pickRow.pickState === "synced" ? "cloud" : "cloud_off"
                           iconSize: Style.font.heading
                           color: pickRow.pickState === "synced" ? Color.accent : root.dim
                           Layout.alignment: Qt.AlignVCenter
@@ -1231,8 +1231,8 @@ Panel {
                 width: parent.width
                 spacing: Style.space(8)
 
-                LucideIcon {
-                  name: "folder-plus"
+                MaterialIcon {
+                  name: "create_new_folder"
                   iconSize: Style.font.heading
                   color: root.foreground
                   Layout.alignment: Qt.AlignVCenter
@@ -1261,7 +1261,7 @@ Panel {
                 }
 
                 IconButton {
-                  iconName: "plus"
+                  iconName: "add"
                   tooltipText: t("tt_create_and_sync")
                   foreground: root.foreground
                   iconSize: Style.font.heading
@@ -1302,7 +1302,7 @@ Panel {
 
                 IconButton {
                   visible: root.history.length > 0
-                  iconName: "trash-2"
+                  iconName: "delete"
                   tooltipText: t("tt_clear_history")
                   foreground: root.foreground
                   iconSize: Style.font.heading
@@ -1403,8 +1403,8 @@ Panel {
                         anchors.rightMargin: Style.space(8)
                         spacing: Style.space(8)
 
-                        LucideIcon {
-                          name: historyRow.modelData && historyRow.modelData.type === "upload" ? "cloud-upload" : "cloud-download"
+                        MaterialIcon {
+                          name: historyRow.modelData && historyRow.modelData.type === "upload" ? "cloud_upload" : "cloud_download"
                           iconSize: Style.font.heading
                           color: historyRow.rowFailed ? root.urgentColor : Color.accent
                           Layout.alignment: Qt.AlignVCenter
@@ -1466,66 +1466,14 @@ Panel {
       }
     }
 
-  // Filled pause/play glyphs: outline glyphs read as muddled at these sizes,
-  // so solid shapes are drawn directly.
-  component FilledPause: Item {
-    id: glyph
-    property color color: "#ffffff"
-    property real iconSize: Style.font.heading
-    width: iconSize
-    height: iconSize
-
-    Rectangle {
-      x: 0
-      width: parent.width * 0.34
-      height: parent.height
-      radius: width / 2
-      color: glyph.color
-    }
-    Rectangle {
-      anchors.right: parent.right
-      width: parent.width * 0.34
-      height: parent.height
-      radius: width / 2
-      color: glyph.color
-    }
-  }
-
-  component FilledPlay: Item {
-    id: glyph
-    property color color: "#ffffff"
-    property real iconSize: Style.font.heading
-    width: iconSize * 0.85
-    height: iconSize
-
-    Canvas {
-      id: triangle
-      anchors.fill: parent
-      onPaint: {
-        var ctx = getContext("2d")
-        ctx.reset()
-        ctx.fillStyle = glyph.color
-        ctx.beginPath()
-        ctx.moveTo(0, 0)
-        ctx.lineTo(width, height / 2)
-        ctx.lineTo(0, height)
-        ctx.closePath()
-        ctx.fill()
-      }
-      Connections {
-        target: glyph
-        function onColorChanged() { triangle.requestPaint() }
-      }
-    }
-  }
-
+  // Pause/resume pair toggle (Material Symbols filled).
   Component {
     id: pauseGlyph
-    FilledPause { color: root.foreground; iconSize: Style.font.heading }
+    MaterialIcon { name: "pause_circle"; color: root.foreground; iconSize: Style.font.heading }
   }
 
   Component {
     id: playGlyph
-    FilledPlay { color: root.foreground; iconSize: Style.font.heading }
+    MaterialIcon { name: "play_circle"; color: root.foreground; iconSize: Style.font.heading }
   }
 }

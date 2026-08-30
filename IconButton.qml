@@ -3,7 +3,7 @@ import qs.Commons
 import qs.Ui
 
 // Small square icon button for panel actions, mirroring PanelActionButton's
-// role but rendering a Lucide SVG instead of a font glyph.
+// role but rendering a Material Symbols SVG instead of a font glyph.
 BorderSurface {
   id: root
 
@@ -43,7 +43,7 @@ BorderSurface {
       sourceComponent: root.iconComponent
     }
 
-    LucideIcon {
+    MaterialIcon {
       anchors.centerIn: parent
       visible: root.iconComponent === null
       name: root.iconName

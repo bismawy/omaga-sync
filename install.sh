@@ -20,7 +20,7 @@ mkdir -p "$PLUGIN_DST" "$HOME/.local/bin" "$UNIT_DST" "$HOME/.local/state/omaga-
 install -m 644 "$SRC_DIR/manifest.json" "$PLUGIN_DST/manifest.json"
 install -m 644 "$SRC_DIR/Panel.qml" "$PLUGIN_DST/Panel.qml"
 install -m 644 "$SRC_DIR/I18n.js" "$PLUGIN_DST/I18n.js"
-install -m 644 "$SRC_DIR/LucideIcon.qml" "$PLUGIN_DST/LucideIcon.qml"
+install -m 644 "$SRC_DIR/MaterialIcon.qml" "$PLUGIN_DST/MaterialIcon.qml"
 install -m 644 "$SRC_DIR/IconButton.qml" "$PLUGIN_DST/IconButton.qml"
 rm -f "$PLUGIN_DST/CloudIcon.qml"
 mkdir -p "$PLUGIN_DST/icons"
