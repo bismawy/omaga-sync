@@ -252,15 +252,17 @@ Panel {
 
   // Pick state for a remote folder against the base folder field:
   // "synced" (already paired), "taken" (base folder used by another pair),
-  // or "available".
+  // or "available". Remote match wins over a base collision, so a pair
+  // using the base folder can't mask another pair syncing this remote.
   function pickState(name) {
     var base = root.home + "/" + localBaseField.text
+    var taken = false
     for (var i = 0; i < root.pairs.length; i++) {
       var pair = root.pairs[i]
       if (String(pair.remote || "") === "/" + name) return "synced"
-      if (String(pair.local || "") === base) return "taken"
+      if (String(pair.local || "") === base) taken = true
     }
-    return "available"
+    return taken ? "taken" : "available"
   }
 
   implicitWidth: button.implicitWidth
@@ -825,7 +827,7 @@ Panel {
               }
 
               Text {
-                visible: root.pairs.length === 0 && !root.loggedIn
+                visible: root.pairs.length === 0
                 width: parent.width
                 textFormat: Text.PlainText
                 text: t("no_folders")
