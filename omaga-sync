@@ -142,9 +142,10 @@ def parse_sync_issue_paths(out):
         parts = line.split(None, 2)
         if len(parts) < 3 or not parts[1].startswith("/"):
             continue
-        m = re.search(r"'([^']+)'", parts[2])
+        m = re.findall(r"'([^'\s]+)'", parts[2]) or re.findall(r"'([^']+)'", parts[2])
         if m:
-            paths.append(parts[1].rstrip("/") + "/" + m.group(1))
+            # strict pattern skips apostrophes inside words ("Can't sync 'x'")
+            paths.append(parts[1].rstrip("/") + "/" + m[-1])
     return paths[:16]
 
 
