@@ -1221,6 +1221,56 @@ Panel {
                   }
                 }
               }
+
+              // New cloud folder: creates /<name> on MEGA and syncs it.
+              RowLayout {
+                width: parent.width
+                spacing: Style.space(8)
+
+                LucideIcon {
+                  name: "folder-plus"
+                  iconSize: Style.font.heading
+                  color: root.foreground
+                  Layout.alignment: Qt.AlignVCenter
+                }
+
+                TextField {
+                  id: newRemoteField
+                  Layout.fillWidth: true
+                  placeholderText: t("new_remote_placeholder")
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  onAccepted: {
+                    if (text.trim() !== "") {
+                      root.runCtlArgs(["add", text.trim(), localBaseField.text])
+                      text = ""
+                      root.addMode = false
+                    }
+                  }
+                  Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Escape) {
+                      keyCatcher.forceActiveFocus()
+                      event.accepted = true
+                    }
+                  }
+                  onActiveFocusChanged: if (!activeFocus) keyCatcher.forceActiveFocus()
+                }
+
+                IconButton {
+                  iconName: "plus"
+                  tooltipText: t("tt_create_and_sync")
+                  foreground: root.foreground
+                  iconSize: Style.font.heading
+                  Layout.alignment: Qt.AlignVCenter
+                  onClicked: {
+                    if (newRemoteField.text.trim() !== "") {
+                      root.runCtlArgs(["add", newRemoteField.text.trim(), localBaseField.text])
+                      newRemoteField.text = ""
+                      root.addMode = false
+                    }
+                  }
+                }
+              }
             }
           }
 

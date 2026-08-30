@@ -36,6 +36,8 @@ var STRINGS = {
   tt_open_folder: { id: "Buka folder", en: "Open folder" },
   tt_reload_folder_list: { id: "Muat ulang daftar folder", en: "Reload folder list" },
   tt_sync_contents: { id: "Sinkronkan isi folder ini", en: "Sync this folder's contents" },
+  new_remote_placeholder: { id: "Folder baru di MEGA…", en: "New MEGA folder…" },
+  tt_create_and_sync: { id: "Buat folder di MEGA dan sinkronkan", en: "Create on MEGA and sync" },
 
   // Sections & Content
   sec_activity: { id: "AKTIVITAS SINKRONISASI", en: "SYNC ACTIVITY" },

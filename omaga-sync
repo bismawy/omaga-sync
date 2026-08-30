@@ -861,6 +861,9 @@ def cmd_add(remote_name, local_base="MEGA"):
             return 1
 
     base.mkdir(parents=True, exist_ok=True)
+    # mega-sync refuses a missing remote; create it first (harmless no-op
+    # error if it already exists)
+    sh(["mega-mkdir", remote], timeout=10)
     rc, _, err = sh(["mega-sync", str(base), remote], timeout=15)
     if rc != 0:
         log(f"gagal menambah sync: {err.strip()}")
