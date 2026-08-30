@@ -1488,7 +1488,7 @@ Panel {
   // Pause/resume pair toggle (Material Symbols filled).
   Component {
     id: pauseGlyph
-    MaterialIcon { name: "pause_circle"; color: root.foreground; iconSize: Style.font.heading }
+    MaterialIcon { name: "pause"; color: root.foreground; iconSize: Style.font.heading }
   }
 
   Component {
