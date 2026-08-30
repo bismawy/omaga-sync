@@ -34,6 +34,13 @@ import tempfile
 import time
 from pathlib import Path
 
+try:
+    import gi
+    gi.require_version("Gio", "2.0")
+    from gi.repository import Gio as _Gio
+except Exception:  # python-gobject absent — fall back to the `gio` CLI
+    _Gio = None
+
 STATE_DIR = Path.home() / ".local/state/omaga-sync"
 STATUS_PATH = STATE_DIR / "status.json"
 
@@ -63,7 +70,8 @@ PAIR_EMBLEMS = {
     "error": "emblem-omaga-error",
 }
 EMBLEM_TRANSFER = "emblem-omaga-transfer"
-MAX_EMBLEM_SUBFOLDERS = 64
+EMBLEM_WALK_EVERY_TICKS = 6  # full tree re-walk interval (~30s)
+MAX_EMBLEM_PATHS = 20000  # ponytail: raise if giant trees need full coverage
 MAX_STR_LEN = 256
 MAX_STATUS_JSON_BYTES = 64 * 1024
 
@@ -253,71 +261,106 @@ class Monitor:
         self.batch_total_downloads = 0
         self.batch_total_uploads = 0
         self.emblems = {}  # local path -> emblem currently set
+        self.emblem_paths = set()  # every badged path under active pair roots
+        self.emblem_roots = []
+        self.emblem_tick = -1  # force first walk
 
     # -- folder emblems (Nautilus) -----------------------------------------
     def sync_emblems(self, status):
-        """Mirror sync states onto folder icons in GNOME Files.
+        """Mirror sync states onto folder and file icons in GNOME Files.
 
-        Badges the pair root, every depth-1 subfolder (synced / syncing /
-        error), and files currently transferring. Nautilus renders
-        metadata::emblems as corner badges; gio is only invoked when a
-        state actually changes, so idle ticks cost nothing.
+        Badges every subfolder and file under each active pair root
+        (synced / syncing / error), plus files currently transferring.
+        Nautilus renders metadata::emblems as corner badges; writes are
+        diffed per tick so idle ticks cost nothing.
         """
         wanted = self.emblem_targets(status)
         for path, emblem in wanted.items():
             if self.emblems.get(path) == emblem:
                 continue
-            if sh(["gio", "set", "-t", "stringv", path,
-                   "metadata::emblems", emblem], timeout=5)[0] == 0:
+            if self.set_emblem(path, emblem):
                 self.emblems[path] = emblem
         for path in list(self.emblems):
             if path not in wanted:
-                if sh(["gio", "set", "-t", "unset", path,
-                       "metadata::emblems"], timeout=5)[0] == 0:
+                if self.set_emblem(path, None):
                     del self.emblems[path]
+
+    @staticmethod
+    def set_emblem(path, emblem):
+        """Set (or clear, emblem=None) metadata::emblems on one path."""
+        if _Gio is not None:
+            f = _Gio.File.new_for_path(path)
+            if emblem is None:
+                return bool(f.set_attribute(
+                    "metadata::emblems", _Gio.FileAttributeType.INVALID, None,
+                    _Gio.FileQueryInfoFlags.NONE, None))
+            info = _Gio.FileInfo.new()
+            info.set_attribute_stringv("metadata::emblems", [emblem])
+            res = f.set_attributes_from_info(
+                info, _Gio.FileQueryInfoFlags.NONE, None)
+            return bool(res[0] if isinstance(res, tuple) else res)
+        cmd = ["gio", "set", "-t", "unset" if emblem is None else "stringv",
+               path, "metadata::emblems"]
+        if emblem is not None:
+            cmd.append(emblem)
+        return sh(cmd, timeout=5)[0] == 0
+
+    def refresh_emblem_walk(self, roots):
+        paths = set()
+        for root in roots:
+            for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+                dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+                for name in filenames:
+                    if not name.startswith("."):
+                        paths.add(os.path.join(dirpath, name))
+                for d in dirnames:
+                    paths.add(os.path.join(dirpath, d))
+                if len(paths) >= MAX_EMBLEM_PATHS:
+                    break
+        self.emblem_paths = paths
+
+    @staticmethod
+    def nearest_badged_parent(path, wanted):
+        parent = path
+        while True:
+            parent = parent.rsplit("/", 1)[0]
+            if parent in wanted:
+                return parent
+            if parent in ("", "/"):
+                return ""
 
     def emblem_targets(self, status):
         pairs = status.get("pairs") or []
-        wanted = {}
-        for pair in pairs:
-            root = str(pair.get("local") or "")
-            state = pair.get("state")
-            if not root:
-                continue
+        roots = {str(p.get("local") or ""): p.get("state")
+                 for p in pairs if p.get("local")}
+        walk_roots = sorted(r for r, s in roots.items() if s in ("synced", "syncing"))
+        self.emblem_tick += 1
+        if self.emblem_tick >= EMBLEM_WALK_EVERY_TICKS or walk_roots != self.emblem_roots:
+            self.refresh_emblem_walk(walk_roots)
+            self.emblem_roots = walk_roots
+            self.emblem_tick = 0
+        wanted = {p: PAIR_EMBLEMS["synced"] for p in self.emblem_paths}
+        for root, state in roots.items():
             emblem = PAIR_EMBLEMS.get(state)
             if emblem:
                 wanted[root] = emblem
-            if state in ("synced", "syncing"):
-                try:
-                    subs = sorted(e.path for e in os.scandir(root)
-                                  if e.is_dir(follow_symlinks=False))
-                except OSError:
-                    subs = []
-                for sub in subs[:MAX_EMBLEM_SUBFOLDERS]:
-                    wanted[sub] = PAIR_EMBLEMS["synced"]
-        # active transfer inside a folder flips it (and the file) to syncing
+        # active transfer flips its nearest folder (and the file) to syncing
         for tr in status.get("activeTransfers") or []:
             local = str(tr.get("dest") or "") if tr.get("type") == "download" \
                 else str(tr.get("path") or "")
             if not local:
                 continue
-            best = ""
-            for folder in wanted:
-                if local.startswith(folder.rstrip("/") + "/") and len(folder) > len(best):
-                    best = folder
-            if best:
-                wanted[best] = PAIR_EMBLEMS["syncing"]
+            folder = self.nearest_badged_parent(local, wanted)
+            if folder:
+                wanted[folder] = PAIR_EMBLEMS["syncing"]
             wanted[local] = EMBLEM_TRANSFER
         # sync issues (e.g. symlinks) flag their containing folder as error
-        if any(p.get("state") in ("syncing", "error") for p in pairs):
+        if any(s in ("syncing", "error") for s in roots.values()):
             _, issues_out, _ = sh(["mega-sync-issues"], timeout=5)
             for path in parse_sync_issue_paths(issues_out):
-                best = ""
-                for folder in wanted:
-                    if path.startswith(folder.rstrip("/") + "/") and len(folder) > len(best):
-                        best = folder
-                if best:
-                    wanted[best] = PAIR_EMBLEMS["error"]
+                folder = self.nearest_badged_parent(path, wanted)
+                if folder:
+                    wanted[folder] = PAIR_EMBLEMS["error"]
         return wanted
 
     # -- polling -----------------------------------------------------------
