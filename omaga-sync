@@ -54,6 +54,14 @@ MAX_PROC_OUTPUT = 256 * 1024  # 256 KB max command output
 MAX_PAIRS = 50
 MAX_REMOTE_FOLDERS = 100
 MAX_TRANSFERS = 6
+
+# Nautilus folder badges (metadata::emblems) mirroring pair states.
+PAIR_EMBLEMS = {
+    "syncing": "emblem-omaga-syncing",
+    "synced": "emblem-omaga-synced",
+    "paused": "emblem-omaga-paused",
+    "error": "emblem-omaga-error",
+}
 MAX_STR_LEN = 256
 MAX_STATUS_JSON_BYTES = 64 * 1024
 
@@ -229,6 +237,32 @@ class Monitor:
         self.last_notify_key = ""
         self.batch_total_downloads = 0
         self.batch_total_uploads = 0
+        self.emblems = {}  # local path -> emblem currently set
+
+    # -- folder emblems (Nautilus) -----------------------------------------
+    def sync_emblems(self, pairs):
+        """Mirror pair states onto folder icons in GNOME Files.
+
+        Nautilus renders metadata::emblems as small corner badges. Only
+        touched when a state actually changes, so the usual tick costs
+        nothing.
+        """
+        wanted = {}
+        for pair in pairs:
+            emblem = PAIR_EMBLEMS.get(pair.get("state"))
+            if emblem:
+                wanted[str(pair.get("local") or "")] = emblem
+        for path, emblem in wanted.items():
+            if self.emblems.get(path) == emblem:
+                continue
+            if sh(["gio", "set", "-t", "stringv", path,
+                   "metadata::emblems", emblem], timeout=5)[0] == 0:
+                self.emblems[path] = emblem
+        for path in list(self.emblems):
+            if path not in wanted:
+                if sh(["gio", "set", "-t", "unset", path,
+                       "metadata::emblems"], timeout=5)[0] == 0:
+                    del self.emblems[path]
 
     # -- polling -----------------------------------------------------------
     def read_once(self):
@@ -387,6 +421,7 @@ class Monitor:
         while True:
             try:
                 status = self.write_status(self.read_once())
+                self.sync_emblems(status.get("pairs", []))
                 self.maybe_notify(status)
             except Exception as exc:  # never die on one bad tick
                 log(f"tick error: {exc}")
