@@ -115,7 +115,8 @@ Panel {
   }
 
   function refresh() {
-    if (statusFile.path !== "") statusFile.reload()
+    if (statusReader.running) statusReader.running = false
+    statusReader.running = true
   }
 
   function runCtl(sub, path) {
@@ -225,14 +226,30 @@ Panel {
     }
   }
 
+  // Watch-only: FileView never loads file content into the shell
+  // (blockLoading). It exists purely to notice status.json changing.
   FileView {
     id: statusFile
     path: root.statusPath
     watchChanges: true
+    blockLoading: true
+    preload: false
     printErrors: false
-    onLoaded: root.parseStatusText(text())
-    onLoadFailed: function(error) { root.statusError = String(error || "") }
-    onFileChanged: reload()
+    onFileChanged: root.refresh()
+  }
+
+  // Bounded reader: `omaga-sync status` enforces regular-file type,
+  // no-symlink (O_NOFOLLOW) and a 64 KB byte cap BEFORE any byte reaches
+  // QML. Only its capped stdout is parsed here.
+  Process {
+    id: statusReader
+    command: [root.ctlBin, "status"]
+    stdout: StdioCollector {
+      onStreamFinished: root.parseStatusText(this.text)
+    }
+    onExited: function(exitCode, exitStatus) {
+      if (exitCode !== 0) root.statusError = "status reader refused the file"
+    }
   }
 
   // Belt and braces: the file watch is the fast path, a slow poll covers a

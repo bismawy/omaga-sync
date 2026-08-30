@@ -7,7 +7,7 @@ fresh and exposes small control commands for the bar widget.
 
 Subcommands:
   monitor          poll loop; writes ~/.local/state/omaga-sync/status.json
-  status           print the current status file
+  status           print the current status file (bounded read, max 64 KB)
   pause [path]     pause one sync pair, or all when no path is given
   resume [path]    resume one sync pair, or all when no path is given
   repair           kill an unsupervised server and restart it under systemd
@@ -27,6 +27,7 @@ States written to status.json:
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -444,13 +445,46 @@ def cmd_repair():
     return rc
 
 
-def cmd_status():
+def read_status_bounded():
+    """Bounded, no-follow read of status.json for external consumers.
+
+    Opens with O_NOFOLLOW and fstats the open fd, so the type/size check
+    can't be raced by a swap between check and read. Returns at most
+    MAX_STATUS_JSON_BYTES of text, or None when the file is missing,
+    a symlink, not a regular file, or oversized."""
     try:
-        print(STATUS_PATH.read_text(), end="")
-        return 0
-    except FileNotFoundError:
-        print("status file belum ada; monitor belum berjalan", file=sys.stderr)
+        fd = os.open(STATUS_PATH, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            return None
+        if st.st_size > MAX_STATUS_JSON_BYTES:
+            return None
+        chunks = []
+        total = 0
+        while total <= MAX_STATUS_JSON_BYTES:
+            chunk = os.read(fd, MAX_STATUS_JSON_BYTES + 1 - total)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+    finally:
+        os.close(fd)
+    if total > MAX_STATUS_JSON_BYTES:
+        return None
+    return b"".join(chunks).decode("utf-8", errors="replace")
+
+
+def cmd_status():
+    data = read_status_bounded()
+    if data is None:
+        print("status file tidak tersedia, bukan file biasa, atau melebihi batas ukuran",
+              file=sys.stderr)
         return 1
+    print(data, end="")
+    return 0
 
 
 def is_safe_user_path(p: Path) -> bool:
