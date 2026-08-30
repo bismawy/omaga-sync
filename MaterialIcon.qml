@@ -33,7 +33,7 @@ Item {
           .replace(/currentColor/g, hexOf(color)))
     : ""
 
-  readonly property string _safeName: /^[a-z0-9-]+$/.test(root.name) ? root.name : ""
+  readonly property string _safeName: /^[a-z0-9_-]+$/.test(root.name) ? root.name : ""
 
   FileView {
     id: svgFile
