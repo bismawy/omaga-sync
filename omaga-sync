@@ -8,6 +8,9 @@ fresh and exposes small control commands for the bar widget.
 Subcommands:
   monitor          poll loop; writes ~/.local/state/omaga-sync/status.json
   status           print the current status file (bounded read, max 64 KB)
+  history          print the transfer history file (bounded read)
+  set-retention D  auto-delete history older than D days (3/7/14/30/60/90/never)
+  clear-history    wipe the transfer history
   pause [path]     pause one sync pair, or all when no path is given
   resume [path]    resume one sync pair, or all when no path is given
   repair           kill an unsupervised server and restart it under systemd
@@ -61,7 +64,16 @@ SYNC_LIST_ARGS = ["mega-sync", "--col-separator=|",
 MAX_PROC_OUTPUT = 256 * 1024  # 256 KB max command output
 MAX_PAIRS = 50
 MAX_REMOTE_FOLDERS = 100
-MAX_TRANSFERS = 6
+MAX_TRANSFERS = 6  # rows surfaced in status.json / panel
+TRANSFER_LIST_LIMIT = 25  # rows tracked for history (bigger batches slip)
+
+# Transfer history (MEGAcmd has none of its own, so we record it locally
+# from mega-transfers snapshots).
+HISTORY_PATH = STATE_DIR / "history.json"
+SETTINGS_PATH = STATE_DIR / "settings.json"
+MAX_HISTORY = 200
+DEFAULT_RETENTION_DAYS = 30
+ALLOWED_RETENTION = {3, 7, 14, 30, 60, 90, 0}  # 0 = keep forever
 
 # Nautilus folder badges (metadata::emblems) mirroring pair states.
 PAIR_EMBLEMS = {
@@ -136,11 +148,11 @@ def parse_sync_issue_paths(out):
     return paths[:16]
 
 
-def parse_active_transfers(out):
+def parse_active_transfers(out, cap=TRANSFER_LIST_LIMIT):
     """Extract individual ongoing transfer rows from `mega-transfers --show-syncs`."""
     transfers = []
     for line in out.splitlines():
-        if len(transfers) >= MAX_TRANSFERS:
+        if len(transfers) >= cap:
             break
         line = line.strip()
         if not line or "|" not in line or line.startswith("TYPE"):
@@ -251,6 +263,45 @@ def notify(summary, body=""):
     sh(args, timeout=4)
 
 
+# -- transfer history -------------------------------------------------------
+def load_retention_days():
+    try:
+        data = json.loads(SETTINGS_PATH.read_text())
+        n = int(data.get("retentionDays", DEFAULT_RETENTION_DAYS))
+        return n if n in ALLOWED_RETENTION else DEFAULT_RETENTION_DAYS
+    except Exception:
+        return DEFAULT_RETENTION_DAYS
+
+
+def load_history():
+    try:
+        data = json.loads(HISTORY_PATH.read_text())
+        entries = data.get("entries") if isinstance(data, dict) else None
+        return list(entries)[-MAX_HISTORY:] if isinstance(entries, list) else []
+    except Exception:
+        return []
+
+
+def save_history(entries):
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = tempfile.NamedTemporaryFile(
+        "w", dir=STATE_DIR, prefix=".history.", suffix=".json", delete=False)
+    try:
+        tmp.write(json.dumps({"entries": entries[-MAX_HISTORY:]}, ensure_ascii=False))
+        tmp.close()
+        Path(tmp.name).replace(HISTORY_PATH)
+    except BaseException:
+        Path(tmp.name).unlink(missing_ok=True)
+        raise
+
+
+def prune_history(entries, retention_days):
+    if retention_days:
+        cutoff = time.time() - retention_days * 86400
+        entries = [e for e in entries if e.get("endedTs", 0) >= cutoff]
+    return entries[-MAX_HISTORY:]
+
+
 class Monitor:
     def __init__(self):
         self.account = {"email": "", "used_bytes": 0, "total_bytes": 0}
@@ -262,6 +313,11 @@ class Monitor:
         self.last_notify_key = ""
         self.batch_total_downloads = 0
         self.batch_total_uploads = 0
+        self.transfers_snapshot = []  # uncapped list, for history tracking
+        self.history = load_history()
+        self.tracked = {}  # (type, path, dest) -> in-flight entry
+        self.retention = load_retention_days()
+        self.retention_tick = 0
         self.emblems = {}  # local path -> emblem currently set
         self.emblem_paths = set()  # every badged path under active pair roots
         self.emblem_roots = []
@@ -372,8 +428,46 @@ class Monitor:
                     wanted[folder] = PAIR_EMBLEMS["error"]
         return wanted
 
+    # -- transfer history -----------------------------------------------------
+    def update_history(self, state):
+        """Record transfers seen in mega-transfers; close them out when the
+        batch ends. ponytail: per-file completion time is the batch-end tick
+        (±5s) — fine for a history list, not an audit log."""
+        now = int(time.time())
+        snapshot = self.transfers_snapshot
+        for tr in snapshot:
+            key = (tr["type"], tr["path"], tr["dest"])
+            e = self.tracked.get(key)
+            if e is None:
+                self.tracked[key] = {"file": tr["file"], "type": tr["type"],
+                                     "startedTs": now,
+                                     "lastProgress": tr["progress"]}
+            else:
+                e["lastProgress"] = tr["progress"]
+        if snapshot or self.tracked:
+            if not snapshot and self.tracked:
+                failed = state == "error"
+                for e in self.tracked.values():
+                    e["endedTs"] = now
+                    e["status"] = "failed" if failed else "completed"
+                    self.history.append(e)
+                self.tracked = {}
+                self.history = prune_history(self.history, self.retention)
+                save_history(self.history)
+
+    def refresh_retention(self):
+        self.retention_tick += 1
+        if self.retention_tick >= 720:  # ~1h: pick up set-retention changes
+            self.retention_tick = 0
+            self.retention = load_retention_days()
+            pruned = prune_history(self.history, self.retention)
+            if len(pruned) != len(self.history):
+                self.history = pruned
+                save_history(self.history)
+
     # -- polling -----------------------------------------------------------
     def read_once(self):
+        self.transfers_snapshot = []
         if not engine_active():
             self.starting_ticks += 1
             if server_process_running():
@@ -442,8 +536,9 @@ class Monitor:
 
             if dl_cnt > 0 or ul_cnt > 0:
                 _, t_act_out, _ = sh(["mega-transfers", "--show-syncs", "--col-separator=|",
-                                      f"--limit={MAX_TRANSFERS}"], timeout=5)
+                                      f"--limit={TRANSFER_LIST_LIMIT}"], timeout=5)
                 active_transfers = parse_active_transfers(t_act_out)
+                self.transfers_snapshot = active_transfers
         else:
             self.batch_total_downloads = 0
             self.batch_total_uploads = 0
@@ -501,6 +596,8 @@ class Monitor:
             "transfersSummary": partial.get("transfersSummary"),
             "activeTransfers": partial.get("activeTransfers", [])[:MAX_TRANSFERS],
             "message": str(partial.get("message", ""))[:MAX_STR_LEN],
+            "historyRetentionDays": self.retention,
+            "historyCount": len(self.history),
         }
         raw_json = json.dumps(status, ensure_ascii=False)
         if len(raw_json.encode("utf-8")) > MAX_STATUS_JSON_BYTES:
@@ -540,6 +637,8 @@ class Monitor:
             while True:
                 try:
                     status = self.write_status(self.read_once())
+                    self.update_history(status["state"])
+                    self.refresh_retention()
                     self.sync_emblems(status)
                     self.maybe_notify(status)
                 except Exception as exc:  # never die on one bad tick
@@ -603,14 +702,19 @@ def cmd_repair():
 
 
 def read_status_bounded():
-    """Bounded, no-follow read of status.json for external consumers.
+    """Bounded, no-follow read of status.json for external consumers."""
+    return read_bounded(STATUS_PATH)
+
+
+def read_bounded(path):
+    """Bounded, no-follow read of a regular file under STATE_DIR.
 
     Opens with O_NOFOLLOW and fstats the open fd, so the type/size check
     can't be raced by a swap between check and read. Returns at most
     MAX_STATUS_JSON_BYTES of text, or None when the file is missing,
     a symlink, not a regular file, or oversized."""
     try:
-        fd = os.open(STATUS_PATH, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     except OSError:
         return None
     try:
@@ -641,6 +745,50 @@ def cmd_status():
               file=sys.stderr)
         return 1
     print(data, end="")
+    return 0
+
+
+def cmd_history():
+    data = read_bounded(HISTORY_PATH)
+    if data is None:
+        print('{"entries": []}')
+        return 0
+    print(data, end="")
+    return 0
+
+
+def cmd_set_retention(arg):
+    a = str(arg or "").strip().lower()
+    if a in ("never", "0", "selamanya"):
+        days = 0
+    else:
+        try:
+            days = int(a)
+        except ValueError:
+            log(f"retensi tidak valid: {a!r} (pilih 3/7/14/30/60/90 atau never)")
+            return 1
+        if days not in ALLOWED_RETENTION:
+            log(f"retensi tidak valid: {days} (pilih 3/7/14/30/60/90 atau never)")
+            return 1
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = tempfile.NamedTemporaryFile(
+        "w", dir=STATE_DIR, prefix=".settings.", suffix=".json", delete=False)
+    try:
+        tmp.write(json.dumps({"retentionDays": days}))
+        tmp.close()
+        Path(tmp.name).replace(SETTINGS_PATH)
+    except BaseException:
+        Path(tmp.name).unlink(missing_ok=True)
+        raise
+    save_history(prune_history(load_history(), days))
+    log(f"retensi riwayat: {'selamanya' if days == 0 else str(days) + ' hari'}")
+    refresh_status_now()
+    return 0
+
+
+def cmd_clear_history():
+    save_history([])
+    refresh_status_now()
     return 0
 
 
@@ -786,6 +934,12 @@ def main():
         Monitor().run()
     elif args[0] == "status":
         return cmd_status()
+    elif args[0] == "history":
+        return cmd_history()
+    elif args[0] == "set-retention":
+        return cmd_set_retention(args[1] if len(args) > 1 else "")
+    elif args[0] == "clear-history":
+        return cmd_clear_history()
     elif args[0] == "pause":
         return cmd_pause(args[1] if len(args) > 1 else "")
     elif args[0] == "resume":

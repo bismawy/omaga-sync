@@ -39,6 +39,13 @@ var STRINGS = {
 
   // Sections & Content
   sec_activity: { id: "AKTIVITAS SINKRONISASI", en: "SYNC ACTIVITY" },
+  tab_syncs: { id: "Sinkron", en: "Syncs" },
+  tab_history: { id: "Riwayat", en: "History" },
+  sec_history: { id: "RIWAYAT TRANSFER", en: "TRANSFER HISTORY" },
+  history_empty: { id: "Belum ada transfer selesai yang tercatat. Riwayat mulai terisi setelah transfer berikutnya selesai.", en: "No completed transfers recorded yet. History fills in after the next transfer finishes." },
+  retention_label: { id: "HAPUS OTOMATIS SETELAH", en: "AUTO-DELETE AFTER" },
+  retention_never: { id: "Simpan selamanya", en: "Keep forever" },
+  tt_clear_history: { id: "Hapus semua riwayat", en: "Clear all history" },
   downloading_files: { id: "Mengunduh", en: "Downloading" },
   uploading_files: { id: "Mengunggah", en: "Uploading" },
   files_count: { id: "file", en: "files" },

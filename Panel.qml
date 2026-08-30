@@ -26,6 +26,9 @@ Panel {
   property var status: null
   property string statusError: ""
   property bool addMode: false
+  property string activeTab: "syncs"
+  property var history: []
+  property string historyError: ""
 
   readonly property string syncState: status ? String(status.state || "") : ""
   readonly property var pairs: status && status.pairs instanceof Array ? status.pairs : []
@@ -38,10 +41,8 @@ Panel {
   readonly property int uploadsCount: transfersSummary ? Number(transfersSummary.uploadsCount || 0) : 0
   readonly property int uploadsTotalCount: transfersSummary ? Number(transfersSummary.uploadsTotalCount || 0) : 0
   readonly property int uploadsCompletedCount: transfersSummary ? Number(transfersSummary.uploadsCompletedCount || 0) : 0
-
-  readonly property int totalTransfersBatch: (downloadsTotalCount > 0 ? downloadsTotalCount : downloadsCount) + (uploadsTotalCount > 0 ? uploadsTotalCount : uploadsCount)
-  readonly property int totalTransfersCompleted: downloadsCompletedCount + uploadsCompletedCount
-  readonly property real batchProgressFraction: totalTransfersBatch > 0 ? Math.min(1.0, Math.max(0.0, totalTransfersCompleted / totalTransfersBatch)) : 0.0
+  readonly property int historyRetentionDays: status ? Number(status.historyRetentionDays || 0) : 0
+  readonly property string retentionValue: historyRetentionDays === 0 ? "never" : String(historyRetentionDays)
 
   readonly property bool hasTransfers: activeTransfers.length > 0 || downloadsCount > 0 || uploadsCount > 0
   readonly property bool loggedIn: ["synced", "syncing", "paused", "error"].indexOf(syncState) !== -1
@@ -117,6 +118,41 @@ Panel {
   function refresh() {
     if (statusReader.running) statusReader.running = false
     statusReader.running = true
+  }
+
+  function refreshHistory() {
+    if (historyReader.running) historyReader.running = false
+    historyReader.running = true
+  }
+
+  function parseHistoryText(raw) {
+    var str = String(raw || "")
+    if (str === "") {
+      historyError = "history reader returned nothing"
+      return
+    }
+    if (str.length > 65536) {
+      historyError = "History data exceeded size limit"
+      return
+    }
+    try {
+      var parsed = JSON.parse(str)
+      var entries = parsed && parsed.entries instanceof Array ? parsed.entries : []
+      // newest first, capped
+      history = entries.slice(Math.max(0, entries.length - 100)).reverse()
+      historyError = ""
+    } catch (e) {
+      historyError = String(e)
+    }
+  }
+
+  function formatHistoryTime(ts) {
+    var d = new Date(Number(ts || 0) * 1000)
+    if (d.getTime() <= 0) return ""
+    var now = new Date()
+    return d.toDateString() === now.toDateString()
+      ? Qt.formatDateTime(d, "HH:mm")
+      : Qt.formatDateTime(d, "dd MMM HH:mm")
   }
 
   function runCtl(sub, path) {
@@ -228,9 +264,11 @@ Panel {
 
   onOpenedChanged: if (opened) {
     refresh()
+    if (activeTab === "history") refreshHistory()
     Qt.callLater(function() { if (keyCatcher) keyCatcher.forceActiveFocus() })
   } else {
     addMode = false
+    activeTab = "syncs"
   }
 
   onAddModeChanged: {
@@ -265,6 +303,15 @@ Panel {
     }
   }
 
+  // Same bounded-read contract, for the transfer history file.
+  Process {
+    id: historyReader
+    command: [root.ctlBin, "history"]
+    stdout: StdioCollector {
+      onStreamFinished: root.parseHistoryText(this.text)
+    }
+  }
+
   // Belt and braces: the file watch is the fast path, a slow poll covers a
   // missed rename (the monitor writes atomically via replace).
   Timer {
@@ -272,14 +319,20 @@ Panel {
     repeat: true
     running: true
     triggeredOnStart: true
-    onTriggered: root.refresh()
+    onTriggered: {
+      root.refresh()
+      if (root.opened && root.activeTab === "history") root.refreshHistory()
+    }
   }
 
   Timer {
     id: actionRefresh
     interval: 800
     repeat: false
-    onTriggered: root.refresh()
+    onTriggered: {
+      root.refresh()
+      if (root.opened) root.refreshHistory()
+    }
   }
 
   IpcHandler {
@@ -590,9 +643,35 @@ Panel {
             }
           }
 
+          // Tabs: live sync state vs recorded transfer history.
+          Item {
+            visible: root.loggedIn
+            width: parent.width
+            height: visible ? tabsRow.implicitHeight : 0
+
+            ButtonGroup {
+              id: tabsRow
+              width: parent.width
+              options: [
+                { value: "syncs", label: root.t("tab_syncs") },
+                { value: "history", label: root.t("tab_history") }
+              ]
+              value: root.activeTab
+              foreground: root.foreground
+              accent: Color.accent
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              focusable: false
+              onChanged: function(v) {
+                root.activeTab = v
+                if (v === "history") root.refreshHistory()
+              }
+            }
+          }
+
           // Sync Activity: real-time transfer progress and active files
           Item {
-            visible: root.hasTransfers && !root.allPaused && root.loggedIn
+            visible: root.hasTransfers && !root.allPaused && root.loggedIn && root.activeTab === "syncs"
             width: parent.width
             height: visible ? activitySection.implicitHeight : 0
 
@@ -616,24 +695,6 @@ Panel {
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
                 wrapMode: Text.WordWrap
-              }
-
-              // Batch progress bar (e.g. 140 / 360)
-              Rectangle {
-                visible: root.totalTransfersBatch > 0
-                width: parent.width
-                height: Style.space(4)
-                radius: Style.cornerRadius > 0 ? height / 2 : 0
-                color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12)
-
-                Rectangle {
-                  width: Math.max(0, Math.min(parent.width, Math.round(parent.width * root.batchProgressFraction)))
-                  height: parent.height
-                  radius: parent.radius
-                  color: Color.accent
-
-                  Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                }
               }
 
               Flickable {
@@ -739,12 +800,12 @@ Panel {
           }
 
           PanelSeparator {
-            visible: root.pairs.length > 0 || root.syncState === "synced"
+            visible: root.activeTab === "syncs" && (root.pairs.length > 0 || root.syncState === "synced")
             foreground: root.foreground
           }
 
           Item {
-            visible: root.pairs.length > 0 || root.syncState === "synced"
+            visible: root.activeTab === "syncs" && (root.pairs.length > 0 || root.syncState === "synced")
             width: parent.width
             height: visible ? foldersSection.implicitHeight : 0
 
@@ -923,7 +984,7 @@ Panel {
           // Add-sync entry point — one clear action, like the desktop app's
           // "Add sync" button. Expands into the remote folder picker.
           Rectangle {
-            visible: root.loggedIn
+            visible: root.loggedIn && root.activeTab === "syncs"
             width: parent.width
             height: addLabelRow.implicitHeight + Style.space(10)
             radius: Style.cornerRadius
@@ -984,7 +1045,7 @@ Panel {
           // the base folder (~/MEGA by default) — same as the desktop app.
           Item {
             id: pickContainer
-            visible: root.loggedIn && root.addMode
+            visible: root.loggedIn && root.addMode && root.activeTab === "syncs"
             width: parent.width
             height: visible ? pickSection.implicitHeight : 0
             clip: true
@@ -1149,6 +1210,190 @@ Panel {
                         visible: pickMouse.containsMouse && pickRow.pickable
                         text: t("tt_sync_contents")
                         fontFamily: root.fontFamily
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // History tab: recorded transfers with retention control.
+          Item {
+            visible: root.loggedIn && root.activeTab === "history"
+            width: parent.width
+            height: visible ? historySection.implicitHeight : 0
+
+            Column {
+              id: historySection
+              width: parent.width
+              spacing: Style.space(8)
+
+              RowLayout {
+                width: parent.width
+                spacing: Style.space(8)
+
+                PanelSectionHeader {
+                  Layout.fillWidth: true
+                  text: t("sec_history")
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                }
+
+                IconButton {
+                  visible: root.history.length > 0
+                  iconName: "trash-2"
+                  tooltipText: t("tt_clear_history")
+                  foreground: root.foreground
+                  iconSize: Style.font.heading
+                  Layout.alignment: Qt.AlignVCenter
+                  onClicked: root.runCtlArgs(["clear-history"])
+                }
+              }
+
+              Text {
+                visible: root.historyError !== ""
+                width: parent.width
+                textFormat: Text.PlainText
+                text: root.historyError
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+
+              Text {
+                visible: root.history.length === 0 && root.historyError === ""
+                width: parent.width
+                textFormat: Text.PlainText
+                text: t("history_empty")
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+
+              // Auto-delete retention: 3–90 days or keep forever.
+              Column {
+                width: parent.width
+                spacing: Style.space(4)
+
+                Text {
+                  text: t("retention_label")
+                  color: Qt.darker(root.foreground, 1.5)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.letterSpacing: 1
+                }
+
+                ButtonGroup {
+                  width: parent.width
+                  options: [
+                    { value: "never", label: "\u221E", tooltip: t("retention_never") },
+                    { value: "3", label: "3d" },
+                    { value: "7", label: "7d" },
+                    { value: "14", label: "14d" },
+                    { value: "30", label: "30d" },
+                    { value: "60", label: "60d" },
+                    { value: "90", label: "90d" }
+                  ]
+                  value: root.retentionValue
+                  foreground: root.foreground
+                  accent: Color.accent
+                  fontFamily: root.fontFamily
+                  fontSize: Style.font.caption
+                  focusable: false
+                  onChanged: function(v) { root.runCtlArgs(["set-retention", v]) }
+                }
+              }
+
+              Flickable {
+                width: parent.width
+                height: Math.min(historyColumn.implicitHeight, Style.space(280))
+                implicitHeight: height
+                contentWidth: width
+                contentHeight: historyColumn.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                flickableDirection: Flickable.VerticalFlick
+                interactive: contentHeight > height
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                Column {
+                  id: historyColumn
+                  width: parent.width
+                  spacing: Style.space(4)
+
+                  Repeater {
+                    model: root.history
+
+                    Rectangle {
+                      id: historyRow
+                      required property var modelData
+                      readonly property bool rowFailed: modelData && modelData.status === "failed"
+                      width: parent.width
+                      height: historyInner.implicitHeight + Style.space(6)
+                      radius: Style.cornerRadius
+                      color: Style.hoverFillFor(root.foreground, Color.accent)
+
+                      RowLayout {
+                        id: historyInner
+                        anchors.fill: parent
+                        anchors.leftMargin: Style.space(8)
+                        anchors.rightMargin: Style.space(8)
+                        spacing: Style.space(8)
+
+                        LucideIcon {
+                          name: historyRow.modelData && historyRow.modelData.type === "upload" ? "cloud-upload" : "cloud-download"
+                          iconSize: Style.font.heading
+                          color: historyRow.rowFailed ? root.urgentColor : Color.accent
+                          Layout.alignment: Qt.AlignVCenter
+                        }
+
+                        ColumnLayout {
+                          Layout.fillWidth: true
+                          spacing: Style.space(1)
+
+                          Text {
+                            Layout.fillWidth: true
+                            textFormat: Text.PlainText
+                            text: historyRow.modelData ? String(historyRow.modelData.file || "") : ""
+                            color: root.foreground
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                            elide: Text.ElideMiddle
+                          }
+
+                          Text {
+                            Layout.fillWidth: true
+                            visible: text !== ""
+                            textFormat: Text.PlainText
+                            text: historyRow.modelData ? String(historyRow.modelData.lastProgress || "") : ""
+                            color: root.dim
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideRight
+                          }
+                        }
+
+                        Text {
+                          Layout.alignment: Qt.AlignVCenter
+                          textFormat: Text.PlainText
+                          text: root.formatHistoryTime(historyRow.modelData ? historyRow.modelData.endedTs : 0)
+                          color: root.dim
+                          font.family: root.fontFamily
+                          font.pixelSize: Style.font.caption
+                        }
+
+                        Text {
+                          Layout.alignment: Qt.AlignVCenter
+                          textFormat: Text.PlainText
+                          text: historyRow.rowFailed ? t("state_failed") : t("state_completed")
+                          color: historyRow.rowFailed ? root.urgentColor : Color.accent
+                          font.family: root.fontFamily
+                          font.pixelSize: Style.font.caption
+                        }
                       }
                     }
                   }
