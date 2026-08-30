@@ -653,28 +653,47 @@ Panel {
             }
           }
 
-          // Tabs: live sync state vs recorded transfer history.
-          Item {
+          // Tabs: live sync state vs recorded transfer history. Two
+          // equal-width buttons (full-width segmented control).
+          Row {
+            id: tabsRow
             visible: root.loggedIn
             width: parent.width
-            height: visible ? tabsRow.implicitHeight : 0
+            height: visible ? tabSyncs.implicitHeight : 0
+            spacing: Style.space(4)
 
-            ButtonGroup {
-              id: tabsRow
-              width: parent.width
-              options: [
-                { value: "syncs", label: root.t("tab_syncs") },
-                { value: "history", label: root.t("tab_history") }
-              ]
-              value: root.activeTab
+            Button {
+              id: tabSyncs
+              width: (parent.width - parent.spacing) / 2
+              text: root.t("tab_syncs")
+              selected: root.activeTab === "syncs"
+              bordered: true
               foreground: root.foreground
               accent: Color.accent
               fontFamily: root.fontFamily
               fontSize: Style.font.caption
               focusable: false
-              onChanged: function(v) {
-                root.activeTab = v
-                if (v === "history") root.refreshHistory()
+              leftAlign: false
+              onClicked: {
+                root.activeTab = "syncs"
+              }
+            }
+
+            Button {
+              id: tabHistory
+              width: (parent.width - parent.spacing) / 2
+              text: root.t("tab_history")
+              selected: root.activeTab === "history"
+              bordered: true
+              foreground: root.foreground
+              accent: Color.accent
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              focusable: false
+              leftAlign: false
+              onClicked: {
+                root.activeTab = "history"
+                root.refreshHistory()
               }
             }
           }
@@ -1474,6 +1493,6 @@ Panel {
 
   Component {
     id: playGlyph
-    MaterialIcon { name: "play_circle"; color: root.foreground; iconSize: Style.font.heading }
+    MaterialIcon { name: "play_arrow"; color: root.foreground; iconSize: Style.font.heading }
   }
 }
