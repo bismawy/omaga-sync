@@ -27,6 +27,7 @@ States written to status.json:
 import json
 import os
 import re
+import signal
 import stat
 import subprocess
 import sys
@@ -72,6 +73,7 @@ PAIR_EMBLEMS = {
 EMBLEM_TRANSFER = "emblem-omaga-transfer"
 EMBLEM_WALK_EVERY_TICKS = 6  # full tree re-walk interval (~30s)
 MAX_EMBLEM_PATHS = 60000  # ponytail: raise if giant trees need full coverage
+MAX_EMBLEM_WRITES_PER_TICK = 2000  # chunk mass writes so one tick stays fast
 MAX_STR_LEN = 256
 MAX_STATUS_JSON_BYTES = 64 * 1024
 
@@ -275,15 +277,22 @@ class Monitor:
         diffed per tick so idle ticks cost nothing.
         """
         wanted = self.emblem_targets(status)
+        writes = 0
         for path, emblem in wanted.items():
             if self.emblems.get(path) == emblem:
                 continue
+            if writes >= MAX_EMBLEM_WRITES_PER_TICK:
+                return  # finish the backlog next tick
             if self.set_emblem(path, emblem):
                 self.emblems[path] = emblem
+                writes += 1
         for path in list(self.emblems):
             if path not in wanted:
+                if writes >= MAX_EMBLEM_WRITES_PER_TICK:
+                    return
                 if self.set_emblem(path, None):
                     del self.emblems[path]
+                    writes += 1
 
     @staticmethod
     def set_emblem(path, emblem):
@@ -515,16 +524,29 @@ class Monitor:
                 tmp.close()
         return status
 
+    def clear_emblems(self):
+        """Remove all badges we set (service stop / uninstall)."""
+        if self.emblems:
+            log(f"clearing {len(self.emblems)} emblems")
+        for path in list(self.emblems):
+            if self.set_emblem(path, None):
+                del self.emblems[path]
+
     def run(self):
         log("monitor started")
-        while True:
-            try:
-                status = self.write_status(self.read_once())
-                self.sync_emblems(status)
-                self.maybe_notify(status)
-            except Exception as exc:  # never die on one bad tick
-                log(f"tick error: {exc}")
-            time.sleep(POLL_SECONDS)
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+        signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
+        try:
+            while True:
+                try:
+                    status = self.write_status(self.read_once())
+                    self.sync_emblems(status)
+                    self.maybe_notify(status)
+                except Exception as exc:  # never die on one bad tick
+                    log(f"tick error: {exc}")
+                time.sleep(POLL_SECONDS)
+        finally:
+            self.clear_emblems()
 
 
 # -- control commands --------------------------------------------------------
