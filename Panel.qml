@@ -250,19 +250,23 @@ Panel {
     return false
   }
 
-  // Pick state for a remote folder against the base folder field:
-  // "synced" (already paired), "taken" (base folder used by another pair),
-  // or "available". Remote match wins over a base collision, so a pair
-  // using the base folder can't mask another pair syncing this remote.
+  // Pick state for a remote folder: "synced" (paired), "taken" (its
+  // destination subfolder collides with or sits inside another pair's
+  // root — MEGA forbids overlapping syncs), or "available".
   function pickState(name) {
-    var base = root.home + "/" + localBaseField.text
-    var taken = false
+    var dest = root.home + "/" + localBaseField.text + "/" + name
     for (var i = 0; i < root.pairs.length; i++) {
       var pair = root.pairs[i]
+      var pl = String(pair.local || "")
       if (String(pair.remote || "") === "/" + name) return "synced"
-      if (String(pair.local || "") === base) taken = true
+      if (pl === dest || dest.indexOf(pl + "/") === 0 || pl.indexOf(dest + "/") === 0)
+        return "taken"
     }
-    return taken ? "taken" : "available"
+    return "available"
+  }
+
+  function pickDest(name) {
+    return root.home + "/" + localBaseField.text + "/" + name
   }
 
   implicitWidth: button.implicitWidth
@@ -360,7 +364,7 @@ Panel {
       Item {
         LucideIcon {
           anchors.centerIn: parent
-          name: "folder-sync"
+          name: "folder-m"
           iconSize: Style.bar.iconCanvas
           color: root.broken ? root.urgentColor : root.foreground
           opacity: root.allPaused || root.syncState === "offline" ? 0.55 : 1.0
@@ -412,7 +416,7 @@ Panel {
             iconOpacity: root.broken ? 1.0 : (root.allPaused ? 0.5 : 1.0)
             iconComponent: Component {
               LucideIcon {
-                name: "folder-sync"
+                name: "folder-m"
                 iconSize: Style.font.display
                 color: root.heroColor
               }
@@ -1182,9 +1186,9 @@ Panel {
                             text: {
                               if (pickRow.pickState === "synced") return t("pick_already_synced")
                               if (pickRow.pickState === "taken") return t("pick_local_used")
-                              return root.home + "/" + localBaseField.text
+                              return root.pickDest(pickRow.modelData)
                             }
-                            color: pickRow.pickState === "synced" ? root.foreground : (pickRow.pickState === "available" ? root.foreground : root.dim)
+                            color: pickRow.pickState === "taken" ? root.dim : root.foreground
                             font.family: root.fontFamily
                             font.pixelSize: Style.font.caption
                             elide: Text.ElideMiddle
@@ -1192,7 +1196,7 @@ Panel {
                         }
 
                         LucideIcon {
-                          visible: pickRow.pickState !== "available"
+                          visible: pickRow.pickState === "synced" || !pickRow.pickable
                           name: pickRow.pickState === "synced" ? "cloud" : "cloud-off"
                           iconSize: Style.font.heading
                           color: pickRow.pickState === "synced" ? Color.accent : root.dim

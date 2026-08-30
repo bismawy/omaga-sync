@@ -830,8 +830,9 @@ def is_safe_user_path(p: Path) -> bool:
 
 
 def cmd_add(remote_name, local_base="MEGA"):
-    """Sync a remote folder's CONTENTS into ~/<local_base> (MEGAsync-style:
-    choosing /OS fills ~/MEGA with the contents, not ~/MEGA/OS)."""
+    """Sync a remote folder as a SUBFOLDER of ~/<local_base> (folder-to-
+    folder mapping: /OS → ~/MEGA/OS). Each pair gets its own local root,
+    so multiple folders can be added without overlapping."""
     name = str(remote_name or "").strip().strip("/")
     if not name or ".." in name.split("/") or len(name) > MAX_STR_LEN:
         log("nama folder remote tidak valid")
@@ -848,23 +849,27 @@ def cmd_add(remote_name, local_base="MEGA"):
     if base.is_symlink() or not is_safe_user_path(base):
         log("path folder lokal tidak aman atau berupa symlink")
         return 1
+    local = base / name  # /OS → ~/MEGA/OS
     remote = "/" + name
 
     _, out, _ = sh(SYNC_LIST_ARGS, timeout=10)
     for pair in parse_pairs(out):
-        if pair["remote"] == remote and pair["local"] == str(base):
-            log(f"{remote} sudah disinkronkan ke {base}")
+        pl = pair["local"]
+        if pair["remote"] == remote and pl == str(local):
+            log(f"{remote} sudah disinkronkan ke {local}")
             return 0
-        if pair["local"] == str(base):
-            log(f"folder {base} sudah dipakai sync {pair['remote']}; "
-                "pakai folder dasar lain")
+        # MEGA forbids overlapping sync roots — a pair at (or inside) the
+        # destination blocks the new one
+        if pl == str(local) or str(local).startswith(pl.rstrip("/") + "/") \
+                or pl.startswith(str(local).rstrip("/") + "/"):
+            log(f"{pl} bentrok/tercakup pair {pair['remote']}; hapus pair itu dulu")
             return 1
 
-    base.mkdir(parents=True, exist_ok=True)
+    local.mkdir(parents=True, exist_ok=True)
     # mega-sync refuses a missing remote; create it first (harmless no-op
     # error if it already exists)
     sh(["mega-mkdir", remote], timeout=10)
-    rc, _, err = sh(["mega-sync", str(base), remote], timeout=15)
+    rc, _, err = sh(["mega-sync", str(local), remote], timeout=15)
     if rc != 0:
         log(f"gagal menambah sync: {err.strip()}")
         return rc

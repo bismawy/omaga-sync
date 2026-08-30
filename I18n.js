@@ -35,7 +35,7 @@ var STRINGS = {
   tt_remove_sync: { id: "Hapus sync ini (file tetap aman)", en: "Remove this sync (files remain safe)" },
   tt_open_folder: { id: "Buka folder", en: "Open folder" },
   tt_reload_folder_list: { id: "Muat ulang daftar folder", en: "Reload folder list" },
-  tt_sync_contents: { id: "Sinkronkan isi folder ini", en: "Sync this folder's contents" },
+  tt_sync_contents: { id: "Sinkronkan sebagai subfolder ~/MEGA/<nama>", en: "Sync as subfolder ~/MEGA/<name>" },
   new_remote_placeholder: { id: "Folder baru di MEGA…", en: "New MEGA folder…" },
   tt_create_and_sync: { id: "Buat folder di MEGA dan sinkronkan", en: "Create on MEGA and sync" },
 
@@ -61,11 +61,11 @@ var STRINGS = {
   sec_folders: { id: "FOLDER", en: "FOLDERS" },
   no_folders: { id: "Belum ada folder yang disinkronkan. Tambahkan lewat “Tambah sinkronisasi” di bawah.", en: "No synced folders yet. Add one with “Add sync” below." },
   add_sync: { id: "Tambah sinkronisasi", en: "Add sync" },
-  add_sync_desc: { id: "Pilih folder dari akun MEGA Anda", en: "Choose a folder from your MEGA account" },
-  dest_label: { id: "Isinya disinkronkan ke:", en: "Sync contents to:" },
+  add_sync_desc: { id: "Tambah folder dari akun MEGA sebagai subfolder", en: "Add a MEGA folder as a subfolder" },
+  dest_label: { id: "Folder muncul di dalam:", en: "Folders appear inside:" },
   loading_folders: { id: "Memuat daftar folder MEGA… (±1 menit)", en: "Loading MEGA folder list… (±1 min)" },
   pick_already_synced: { id: "sudah tersinkron", en: "already synced" },
-  pick_local_used: { id: "tujuan dipakai sinkronisasi lain — ubah kolom tujuan di atas", en: "destination used by another sync — change it above" },
+  pick_local_used: { id: "dipakai/tercakup sinkronisasi lain — hapus pair itu dulu", en: "used by or inside another sync — remove that pair first" },
 
   // Login Section
   login_prompt: { id: "Sesi MEGA belum ada. Masukkan email, klik Login, lalu isi password dan kode 2FA di terminal yang terbuka:", en: "No active MEGA session. Enter email, click Login, then fill in password & 2FA in the terminal:" },
