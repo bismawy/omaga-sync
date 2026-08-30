@@ -213,7 +213,7 @@ def normalize_pair(run, status):
         return "paused"
     if run in ("PENDING", "LOADING") or status in ("SYNCING", "PENDING", "PROCESSING"):
         return "syncing"
-    if status == "SYNCED" and run == "RUNNING":
+    if status in ("SYNCED", "NONE") and run == "RUNNING":
         return "synced"
     return "syncing"  # unknown combinations read as active, never as idle
 
@@ -250,7 +250,9 @@ def parse_pairs(out):
             "remote": remote,
             "run": run,
             "status": status,
-            "state": normalize_pair(run, status),
+            # a non-empty ERROR column is the strongest signal ("Sync Issues",
+            # "Deleted remote", ...) — beats any STATUS value
+            "state": "error" if words else normalize_pair(run, status),
             "error": " ".join(words)[:200],
         })
     return pairs
@@ -342,28 +344,34 @@ class Monitor:
             if self.set_emblem(path, emblem):
                 self.emblems[path] = emblem
                 writes += 1
+            # a vanished path just fails silently; the next walk drops it
         for path in list(self.emblems):
             if path not in wanted:
                 if writes >= MAX_EMBLEM_WRITES_PER_TICK:
                     return
-                if self.set_emblem(path, None):
-                    del self.emblems[path]
+                if self.set_emblem(path, None) or not os.path.exists(path):
+                    del self.emblems[path]  # cleared, or gone for good
                     writes += 1
 
     @staticmethod
     def set_emblem(path, emblem):
-        """Set (or clear, emblem=None) metadata::emblems on one path."""
-        if _Gio is not None:
-            f = _Gio.File.new_for_path(path)
-            if emblem is None:
-                return bool(f.set_attribute(
-                    "metadata::emblems", _Gio.FileAttributeType.INVALID, None,
-                    _Gio.FileQueryInfoFlags.NONE, None))
-            info = _Gio.FileInfo.new()
-            info.set_attribute_stringv("metadata::emblems", [emblem])
-            res = f.set_attributes_from_info(
-                info, _Gio.FileQueryInfoFlags.NONE, None)
-            return bool(res[0] if isinstance(res, tuple) else res)
+        """Set (or clear, emblem=None) metadata::emblems on one path.
+        Returns False when the path vanished mid-tick (normal — files get
+        deleted while we walk); callers just retry or drop it next tick."""
+        try:
+            if _Gio is not None:
+                f = _Gio.File.new_for_path(path)
+                if emblem is None:
+                    return bool(f.set_attribute(
+                        "metadata::emblems", _Gio.FileAttributeType.INVALID, None,
+                        _Gio.FileQueryInfoFlags.NONE, None))
+                info = _Gio.FileInfo.new()
+                info.set_attribute_stringv("metadata::emblems", [emblem])
+                res = f.set_attributes_from_info(
+                    info, _Gio.FileQueryInfoFlags.NONE, None)
+                return bool(res[0] if isinstance(res, tuple) else res)
+        except Exception:
+            return False
         cmd = ["gio", "set", "-t", "unset" if emblem is None else "stringv",
                path, "metadata::emblems"]
         if emblem is not None:
@@ -398,7 +406,7 @@ class Monitor:
         pairs = status.get("pairs") or []
         roots = {str(p.get("local") or ""): p.get("state")
                  for p in pairs if p.get("local")}
-        walk_roots = sorted(r for r, s in roots.items() if s in ("synced", "syncing"))
+        walk_roots = sorted(r for r, s in roots.items() if s in ("synced", "syncing", "error"))
         self.emblem_tick += 1
         if self.emblem_tick >= EMBLEM_WALK_EVERY_TICKS or walk_roots != self.emblem_roots:
             self.refresh_emblem_walk(walk_roots)
@@ -429,7 +437,7 @@ class Monitor:
         return wanted
 
     # -- transfer history -----------------------------------------------------
-    def update_history(self, state):
+    def update_history(self):
         """Record transfers seen in mega-transfers; close them out when the
         batch ends. ponytail: per-file completion time is the batch-end tick
         (±5s) — fine for a history list, not an audit log."""
@@ -441,15 +449,19 @@ class Monitor:
             if e is None:
                 self.tracked[key] = {"file": tr["file"], "type": tr["type"],
                                      "startedTs": now,
-                                     "lastProgress": tr["progress"]}
+                                     "lastProgress": tr["progress"],
+                                     "lastState": tr["state"]}
             else:
                 e["lastProgress"] = tr["progress"]
+                e["lastState"] = tr["state"]
         if snapshot or self.tracked:
             if not snapshot and self.tracked:
-                failed = state == "error"
+                # the batch vanished; per-file verdict from its last seen
+                # state (the overall state may be "error" for unrelated
+                # stuck items while these finished fine)
                 for e in self.tracked.values():
                     e["endedTs"] = now
-                    e["status"] = "failed" if failed else "completed"
+                    e["status"] = "failed" if e.get("lastState") in ("failed", "error") else "completed"
                     self.history.append(e)
                 self.tracked = {}
                 self.history = prune_history(self.history, self.retention)
@@ -504,11 +516,16 @@ class Monitor:
         _, sync_out, _ = sh(SYNC_LIST_ARGS, timeout=10)
         pairs = parse_pairs(sync_out)
         states = [p["state"] for p in pairs]
+        # run PENDING/LOADING = pair still spinning up (counts as syncing)
+        starting = any(p["run"] in ("PENDING", "LOADING") for p in pairs)
 
         active_transfers = []
         transfers_summary = None
+        dl_cnt = ul_cnt = 0
 
-        if any(s == "syncing" for s in states):
+        # poll transfers whenever any pair is RUNNING — an "error" pair
+        # (stuck item) still syncs its healthy files
+        if any(p["run"] == "RUNNING" for p in pairs):
             _, t_sum_out, _ = sh(["mega-transfers", "--summary"], timeout=5)
             transfers_summary = parse_transfers_summary(t_sum_out)
             dl_cnt = transfers_summary["downloadsCount"]
@@ -544,12 +561,19 @@ class Monitor:
             self.batch_total_uploads = 0
 
         if any(s == "error" for s in states):
+            message = "; ".join(p["error"] for p in pairs if p["error"])
+            _, iss_out, _ = sh(["mega-sync-issues"], timeout=5)
+            issues = parse_sync_issue_paths(iss_out)
+            message = "; ".join(([message] if message else []) + issues[:3])
             return {"state": "error", "pairs": pairs,
                     "transfersSummary": transfers_summary, "activeTransfers": active_transfers,
-                    "message": "; ".join(p["error"] for p in pairs if p["error"])[:200]}
+                    "message": message[:200]}
         if pairs and all(s == "paused" for s in states):
             return {"state": "paused", "pairs": pairs}
-        if any(s != "synced" for s in states):
+        # "syncing" only on hard evidence: live transfers, or a pair still
+        # starting. mega-sync's STATUS=Syncing alone can stick forever
+        # (e.g. a permanent sync issue) with nothing actually moving.
+        if starting or dl_cnt > 0 or ul_cnt > 0:
             return {"state": "syncing", "pairs": pairs,
                     "transfersSummary": transfers_summary, "activeTransfers": active_transfers}
         return {"state": "synced", "pairs": pairs}
@@ -637,7 +661,7 @@ class Monitor:
             while True:
                 try:
                     status = self.write_status(self.read_once())
-                    self.update_history(status["state"])
+                    self.update_history()
                     self.refresh_retention()
                     self.sync_emblems(status)
                     self.maybe_notify(status)

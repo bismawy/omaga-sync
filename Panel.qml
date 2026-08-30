@@ -83,6 +83,10 @@ Panel {
   }
   readonly property string metaLabel: {
     var parts = [stateLabel]
+    if (syncState === "syncing") {
+      var sum = transfersSummaryText()
+      if (sum !== "") parts.push(sum)
+    }
     if (status && status.updatedTs) parts.push(Qt.formatDateTime(new Date(status.updatedTs * 1000), "HH:mm"))
     return parts.join(" · ")
   }
@@ -462,7 +466,7 @@ Panel {
             textFormat: Text.PlainText
             text: root.syncState === "offline"
               ? t("server_offline_msg")
-              : t("folder_error_msg")
+              : (root.status && root.status.message ? String(root.status.message) : t("folder_error_msg"))
             color: root.urgentColor
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
