@@ -151,6 +151,19 @@ Panel {
     return (unit === 0 ? value : value.toFixed(1)) + " " + units[unit]
   }
 
+  // Transfers whose local side lives inside the given sync pair folder.
+  // Uploads carry the local path in `path` (source), downloads in `dest`.
+  function pairTransfersFor(localPath) {
+    if (!localPath || localPath === "" || !root.activeTransfers) return []
+    var out = []
+    for (var i = 0; i < root.activeTransfers.length; i++) {
+      var tr = root.activeTransfers[i]
+      var p = String(tr.type) === "upload" ? String(tr.path || "") : String(tr.dest || "")
+      if (p.indexOf(localPath) === 0) out.push(tr)
+    }
+    return out
+  }
+
   function pairStateLabel(raw) {
     switch (String(raw || "")) {
       case "error": return t("pair_error")
@@ -766,6 +779,15 @@ Panel {
                   readonly property string pairState: modelData ? String(modelData.state || "") : ""
                   readonly property bool pairPaused: pairState === "paused"
                   readonly property bool pairFailed: pairState === "error"
+                  readonly property var pairTransfers: root.pairTransfersFor(modelData ? String(modelData.local || "") : "")
+                  readonly property string transfersTooltip: {
+                    if (pairTransfers.length === 0) return ""
+                    var names = []
+                    for (var i = 0; i < Math.min(pairTransfers.length, 3); i++)
+                      names.push(String(pairTransfers[i].file || ""))
+                    if (pairTransfers.length > 3) names.push("+" + (pairTransfers.length - 3))
+                    return names.join("\n")
+                  }
 
                   width: parent.width
                   height: pairInner.implicitHeight + Style.space(8)
@@ -791,7 +813,7 @@ Panel {
 
                       PanelToolTip {
                         visible: folderClickArea.containsMouse
-                        text: t("tt_open_folder")
+                        text: pairRow.transfersTooltip !== "" ? pairRow.transfersTooltip : t("tt_open_folder")
                         fontFamily: root.fontFamily
                       }
 
@@ -799,12 +821,38 @@ Panel {
                         anchors.fill: parent
                         spacing: Style.space(8)
 
-                        LucideIcon {
-                          name: "folder"
-                          iconSize: Style.font.heading
-                          color: pairRow.pairFailed ? root.urgentColor
-                            : pairRow.pairPaused ? Qt.darker(root.dim, 1.3) : Color.accent
+                        Item {
                           Layout.alignment: Qt.AlignVCenter
+                          implicitWidth: Style.font.heading
+                          implicitHeight: Style.font.heading
+
+                          LucideIcon {
+                            anchors.fill: parent
+                            name: "folder"
+                            iconSize: Style.font.heading
+                            color: pairRow.pairFailed ? root.urgentColor
+                              : pairRow.pairPaused ? Qt.darker(root.dim, 1.3) : Color.accent
+                          }
+
+                          // Transfer emblem, like a Nautilus symlink badge.
+                          LucideIcon {
+                            visible: pairRow.pairTransfers.length > 0
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.rightMargin: -Style.space(3)
+                            anchors.bottomMargin: -Style.space(3)
+                            name: "rotate-cw"
+                            iconSize: Math.max(10, Math.round(Style.font.heading * 0.55))
+                            color: Color.accent
+
+                            NumberAnimation on rotation {
+                              from: 0
+                              to: 360
+                              duration: 1500
+                              loops: Animation.Infinite
+                              running: parent.visible
+                            }
+                          }
                         }
 
                         ColumnLayout {
@@ -829,6 +877,13 @@ Panel {
                               if (!pairRow.modelData) return ""
                               var detail = String(pairRow.modelData.error || "").trim()
                               if (pairRow.pairFailed && detail !== "" && detail.toUpperCase() !== "NO") return detail
+                              if (pairRow.pairTransfers.length > 0) {
+                                var tr = pairRow.pairTransfers[0]
+                                var file = String(tr.file || "")
+                                var prog = String(tr.progress || "")
+                                if (file !== "" && prog !== "") return file + " — " + prog
+                                return file !== "" ? file : prog
+                              }
                               return root.pairStateLabel(pairRow.pairState)
                             }
                             color: pairRow.pairFailed ? root.urgentColor : root.foreground

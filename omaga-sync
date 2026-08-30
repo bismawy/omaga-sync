@@ -121,6 +121,7 @@ def parse_active_transfers(out):
                 "type": direction,
                 "file": filename[:64],
                 "path": src[:MAX_STR_LEN],
+                "dest": dst[:MAX_STR_LEN],
                 "progress": prog[:48],
                 "state": state.lower()[:32],
             })
