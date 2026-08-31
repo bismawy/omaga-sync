@@ -327,6 +327,83 @@ class Monitor:
         self.emblem_tick = -1  # force first walk
 
     # -- folder emblems (Nautilus) -----------------------------------------
+    def pair_roots_now(self):
+        """Current pair local roots (all states, incl. paused) — sync_emblems
+        recomputes these anyway; this is just the startup-sweep input."""
+        _, out, _ = sh(SYNC_LIST_ARGS, timeout=10)
+        return {p["local"] for p in parse_pairs(out) if p.get("local")}
+
+    def sweep_orphan_emblems(self, pair_roots):
+        """Clear omaga emblems left by a previous monitor run (crash/kill
+        skipped clear_emblems, or a chunked clear got interrupted). Walks
+        the parent of every pair root — stale badges live in and around
+        old roots like ~/MEGA, not just inside current ones."""
+        sweep_roots = {os.path.dirname(r.rstrip("/")) or "/" for r in pair_roots}
+        swept = 0
+        for root in sweep_roots:
+            if not os.path.isdir(root):
+                continue
+            for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+                if dirpath.count(os.sep) - root.count(os.sep) > 3:
+                    dirnames[:] = []  # ponytail: sweep depth ≤3; deeper orphans are rare
+                    continue
+                dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+                for path in [dirpath] + [os.path.join(dirpath, n) for n in filenames]:
+                    if path in pair_roots:
+                        continue
+                    if self.set_emblem_if_ours(path, None):
+                        swept += 1
+                        if swept >= MAX_EMBLEM_WRITES_PER_TICK:
+                            log(f"orphan emblem sweep capped at {swept}")
+                            return swept
+        if swept:
+            log(f"swept {swept} orphan emblems")
+        return swept
+
+    def set_emblem_if_ours(self, path, emblem):
+        """Like set_emblem, but only touches paths whose current emblem is
+        one of ours (never clobber unrelated user emblems)."""
+        try:
+            f = _Gio.File.new_for_path(path) if _Gio is not None else None
+        except Exception:
+            return False
+        if f is not None:
+            try:
+                info = f.query_info("metadata::emblems",
+                                    _Gio.FileQueryInfoFlags.NONE, None)
+                cur = info.get_attribute_stringv("metadata::emblems") or []
+                ours = [e for e in cur if e.startswith("emblem-omaga-")]
+                if not ours:
+                    return False
+                if emblem is not None:
+                    return self.set_emblem(path, emblem)
+                # clear only our names, keep any foreign emblems
+                keep = [e for e in cur if not e.startswith("emblem-omaga-")]
+                if keep:
+                    return self.set_emblem_stringv(path, keep)
+                return self.set_emblem(path, None)
+            except Exception:
+                return False
+        # gio fallback
+        rc, out, _ = sh(["gio", "info", path], timeout=5)
+        if rc != 0 or "emblem-omaga-" not in out:
+            return False
+        return self.set_emblem(path, None)
+
+    @staticmethod
+    def set_emblem_stringv(path, emblems):
+        try:
+            if _Gio is not None:
+                info = _Gio.FileInfo.new()
+                info.set_attribute_stringv("metadata::emblems", emblems)
+                res = _Gio.File.new_for_path(path).set_attributes_from_info(
+                    info, _Gio.FileQueryInfoFlags.NONE, None)
+                return bool(res[0] if isinstance(res, tuple) else res)
+        except Exception:
+            return False
+        cmd = ["gio", "set", "-t", "stringv", path, "metadata::emblems"] + emblems
+        return sh(cmd, timeout=5)[0] == 0
+
     def sync_emblems(self, status):
         """Mirror sync states onto folder and file icons in GNOME Files.
 
@@ -659,6 +736,9 @@ class Monitor:
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
         signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
         try:
+            # one-time startup sweep: badges orphaned by a crashed/killed
+            # previous run (clear_emblems never ran, or was interrupted)
+            self.sweep_orphan_emblems(set(self.pair_roots_now()))
             while True:
                 try:
                     status = self.write_status(self.read_once())
@@ -686,7 +766,7 @@ def ensure_engine():
 
 def pair_paths():
     _, out, _ = sh(SYNC_LIST_ARGS, timeout=10)
-    return [p["local"] for p in parse_pairs(out) if p["state"] != "paused"]
+    return [p["local"] for p in parse_pairs(out)]
 
 
 def cmd_pause(path=""):
