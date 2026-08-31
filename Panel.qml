@@ -660,7 +660,7 @@ Panel {
             visible: root.loggedIn
             width: parent.width
             height: visible ? tabSyncs.implicitHeight : 0
-            spacing: Style.space(4)
+            spacing: Style.space(6)
 
             Button {
               id: tabSyncs
@@ -671,7 +671,7 @@ Panel {
               foreground: root.foreground
               accent: Color.accent
               fontFamily: root.fontFamily
-              fontSize: Style.font.caption
+              fontSize: Style.font.bodySmall
               focusable: false
               leftAlign: false
               onClicked: {
@@ -688,7 +688,7 @@ Panel {
               foreground: root.foreground
               accent: Color.accent
               fontFamily: root.fontFamily
-              fontSize: Style.font.caption
+              fontSize: Style.font.bodySmall
               focusable: false
               leftAlign: false
               onClicked: {
