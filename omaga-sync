@@ -60,6 +60,10 @@ RUN_STATES = {"PENDING", "LOADING", "RUNNING", "SUSPENDED", "DISABLED"}
 STATUS_VALUES = {"NONE", "SYNCED", "PENDING", "SYNCING", "PROCESSING", "ERROR"}
 SYNC_LIST_ARGS = ["mega-sync", "--col-separator=|",
                   "--output-cols=LOCALPATH,REMOTEPATH,RUN_STATE,STATUS,ERROR"]
+# Path collapsing would truncate PARENT_SYNC ("/hom...KTOP"), so issue paths
+# built from it would be useless for the panel message and Nautilus badges.
+SYNC_ISSUES_ARGS = ["mega-sync-issues", "--col-separator=|",
+                    "--disable-path-collapse"]
 
 MAX_PROC_OUTPUT = 256 * 1024  # 256 KB max command output
 MAX_PAIRS = 50
@@ -136,16 +140,25 @@ def parse_transfers_summary(out):
 
 
 def parse_sync_issue_paths(out):
-    """Extract local paths from `mega-sync-issues` (PARENT_SYNC + quoted name)."""
+    """Extract local paths from `mega-sync-issues` (PARENT_SYNC + quoted name).
+    Handles both the --col-separator=| rows we request (full paths) and the
+    space-aligned fallback table (paths collapsed by MEGAcmd)."""
     paths = []
     for line in out.splitlines():
-        parts = line.split(None, 2)
-        if len(parts) < 3 or not parts[1].startswith("/"):
-            continue
-        m = re.findall(r"'([^'\s]+)'", parts[2]) or re.findall(r"'([^']+)'", parts[2])
+        if "|" in line:
+            cells = [c.strip() for c in line.split("|")]
+            if len(cells) < 3 or not cells[1].startswith("/"):
+                continue
+            parent, reason = cells[1], cells[2]
+        else:
+            parts = line.split(None, 2)
+            if len(parts) < 3 or not parts[1].startswith("/"):
+                continue
+            parent, reason = parts[1], parts[2]
+        m = re.findall(r"'([^'\s]+)'", reason) or re.findall(r"'([^']+)'", reason)
         if m:
             # strict pattern skips apostrophes inside words ("Can't sync 'x'")
-            paths.append(parts[1].rstrip("/") + "/" + m[-1])
+            paths.append(parent.rstrip("/") + "/" + m[-1])
     return paths[:16]
 
 
@@ -184,11 +197,17 @@ def parse_whoami(out):
 
 
 def parse_df(out):
-    """USED STORAGE line from `mega-df`: used bytes and total bytes."""
+    """USED STORAGE line from `mega-df`: used bytes and total bytes.
+    USED STORAGE excludes file versions, but they count toward the account
+    quota (the MEGA GUI usage bar includes them), so add them in."""
     m = re.search(r"USED STORAGE:\s+(\d+)\s+[\d.]+%\s*of\s+(\d+)", out)
-    if m:
-        return int(m.group(1)), int(m.group(2))
-    return 0, 0
+    if not m:
+        return 0, 0
+    used, total = int(m.group(1)), int(m.group(2))
+    versions = re.search(r"file versions:\s+(\d+)", out)
+    if versions:
+        used += int(versions.group(1))
+    return used, total
 
 
 def parse_remote_folders(out):
@@ -507,7 +526,7 @@ class Monitor:
             wanted[local] = EMBLEM_TRANSFER
         # sync issues (e.g. symlinks) flag their containing folder as error
         if any(s in ("syncing", "error") for s in roots.values()):
-            _, issues_out, _ = sh(["mega-sync-issues"], timeout=5)
+            _, issues_out, _ = sh(SYNC_ISSUES_ARGS, timeout=5)
             for path in parse_sync_issue_paths(issues_out):
                 folder = self.nearest_badged_parent(path, wanted)
                 if folder:
@@ -640,7 +659,7 @@ class Monitor:
 
         if any(s == "error" for s in states):
             message = "; ".join(p["error"] for p in pairs if p["error"])
-            _, iss_out, _ = sh(["mega-sync-issues"], timeout=5)
+            _, iss_out, _ = sh(SYNC_ISSUES_ARGS, timeout=5)
             issues = parse_sync_issue_paths(iss_out)
             message = "; ".join(([message] if message else []) + issues[:3])
             return {"state": "error", "pairs": pairs,
