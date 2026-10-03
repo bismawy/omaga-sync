@@ -16,14 +16,16 @@ mkdir -p "$PLUGIN_DST" "$HOME/.local/bin" "$UNIT_DST" "$HOME/.local/state/omaga-
   "$HOME/.local/share/nautilus-python/extensions" \
   "$HOME/.local/share/icons/hicolor/scalable/emblems"
 
-# The plugin loader rejects symlinks, so always copy.
+# The plugin loader rejects symlinks, so always copy. Recreate the plugin
+# directory first: copying never removes files deleted upstream, so a stale
+# QML or icon would otherwise linger across upgrades.
+rm -rf "$PLUGIN_DST"
+mkdir -p "$PLUGIN_DST/icons"
 install -m 644 "$SRC_DIR/manifest.json" "$PLUGIN_DST/manifest.json"
 install -m 644 "$SRC_DIR/Panel.qml" "$PLUGIN_DST/Panel.qml"
 install -m 644 "$SRC_DIR/I18n.js" "$PLUGIN_DST/I18n.js"
 install -m 644 "$SRC_DIR/MaterialIcon.qml" "$PLUGIN_DST/MaterialIcon.qml"
 install -m 644 "$SRC_DIR/IconButton.qml" "$PLUGIN_DST/IconButton.qml"
-rm -f "$PLUGIN_DST/CloudIcon.qml"
-mkdir -p "$PLUGIN_DST/icons"
 install -m 644 "$SRC_DIR"/icons/*.svg "$PLUGIN_DST/icons/"
 
 if [[ $plugin_only -eq 1 ]]; then
@@ -62,7 +64,20 @@ systemctl --user enable --now omaga-sync-engine.service
 systemctl --user enable --now omaga-sync-monitor.service
 
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
-omarchy plugin enable "$PLUGIN_ID" >/dev/null 2>&1 \
+
+# The shell is still reloading right after a rescan and answers "not
+# responding" to enable requests, so retry briefly and confirm the resulting
+# state instead of trusting the exit code.
+plugin_enabled() {
+  omarchy plugin list 2>/dev/null \
+    | awk -v id="$PLUGIN_ID" '$1 == id && $2 == "enabled" { found = 1 } END { exit !found }'
+}
+for _ in 1 2 3; do
+  plugin_enabled && break
+  omarchy plugin enable "$PLUGIN_ID" >/dev/null 2>&1 || true
+  sleep 1
+done
+plugin_enabled \
   || echo "Aktifkan widget manual: omarchy plugin enable $PLUGIN_ID"
 
 sleep 2
