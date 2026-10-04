@@ -30,6 +30,8 @@ var STRINGS = {
   tt_pause_all: { id: "Jeda semua sinkronisasi", en: "Pause all syncing" },
   tt_reload_status: { id: "Muat ulang status", en: "Reload status" },
   tt_logout: { id: "Logout dari akun MEGA", en: "Log out of MEGA account" },
+  tt_hide_email: { id: "Sembunyikan email", en: "Hide email" },
+  tt_show_email: { id: "Tampilkan email", en: "Show email" },
   tt_resume_folder: { id: "Lanjutkan folder ini", en: "Resume this folder" },
   tt_pause_folder: { id: "Jeda folder ini", en: "Pause this folder" },
   tt_remove_sync: { id: "Hapus sync ini (file tetap aman)", en: "Remove this sync (files remain safe)" },

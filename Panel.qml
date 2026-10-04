@@ -55,6 +55,11 @@ Panel {
   readonly property bool hasTransfers: activeTransfers.length > 0 || downloadsCount > 0 || uploadsCount > 0
   readonly property bool loggedIn: ["synced", "syncing", "paused", "error"].indexOf(syncState) !== -1
   readonly property string email: str("email")
+  // Masked until the eye button is clicked. Stored shell-side (shell.json) rather
+  // than as a file: the tooltip, the live string and the remembered preference
+  // stay one value, and there is no state file to keep in sync.
+  property bool hideEmail: setting("hideEmail", true)
+  readonly property string emailDisplay: hideEmail && email !== "" ? "************" : (email !== "" ? email : "MEGA Sync")
   readonly property real usedBytes: num("usedBytes")
   readonly property real totalBytes: num("totalBytes")
   readonly property real quotaFraction: totalBytes > 0 ? Math.min(1, usedBytes / totalBytes) : 0
@@ -71,6 +76,25 @@ Panel {
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
   readonly property string lang: I18n.resolveLang(setting("language", "auto"))
+
+  // Mirrors the clock panel's persistSettings: apply locally first so the panel
+  // redraws on the click, then let the shell.json write come back through the
+  // bar as the same value. Outside a bar (no layout entry) it stays a
+  // session-only preference instead of silently doing nothing.
+  function persistSettings(values) {
+    var entry = { id: moduleName }
+    for (var existing in settings) if (existing !== "id") entry[existing] = settings[existing]
+    for (var key in values) entry[key] = values[key]
+
+    root.settings = entry
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
+      root.bar.shell.updateEntryInline(moduleName, entry)
+  }
+
+  function toggleEmail() {
+    hideEmail = !hideEmail
+    persistSettings({ hideEmail: hideEmail })
+  }
 
   function t(key) {
     return I18n.tr(key, lang)
@@ -470,62 +494,123 @@ Panel {
         width: parent.width
         spacing: Style.space(12)
 
-          PanelHero {
+          // The hero is laid out here rather than with qs.Ui's PanelHero: the
+          // reveal control belongs immediately after the address, and
+          // PanelHero's only free slot is the trailing edge. Geometry mirrors
+          // PanelHero (icon left, labels at +14, meta under the title, controls
+          // hugging the right edge) so the panel looks the same as before.
+          Item {
             id: hero
-            width: parent.width
-            title: root.email !== "" ? root.email : "MEGA Sync"
-            meta: root.statusError !== "" && !root.status ? t("monitor_not_running")
-              : root.metaLabel
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-            iconOpacity: root.broken ? 1.0 : (root.allPaused ? 0.5 : 1.0)
-            iconComponent: Component {
-              MaterialIcon {
-                name: "folder-m"
-                iconSize: Style.font.display
-                color: root.heroColor
+            width: parent ? parent.width : implicitWidth
+            implicitHeight: Math.max(heroIcon.height, heroLabels.height, heroTrailing.height)
+            readonly property string fontFamily: root.fontFamily
+
+            MaterialIcon {
+              id: heroIcon
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
+              name: "folder-m"
+              iconSize: Style.font.display
+              color: root.heroColor
+              opacity: root.broken ? 1.0 : (root.allPaused ? 0.5 : 1.0)
+            }
+
+            Column {
+              id: heroLabels
+              anchors.left: heroIcon.right
+              anchors.leftMargin: Style.space(14)
+              anchors.right: heroTrailing.left
+              anchors.rightMargin: Style.space(12)
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(2)
+
+              Row {
+                id: titleRow
+                spacing: Style.space(4)
+                width: parent.width
+
+                Text {
+                  id: titleText
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: root.emailDisplay
+                  color: root.foreground
+                  font.family: hero.fontFamily
+                  font.pixelSize: Style.font.title
+                  font.bold: true
+                  elide: Text.ElideRight
+                  // A long address must not push the reveal button off the row.
+                  width: Math.min(implicitWidth, Math.max(0, titleRow.width - (revealButton.visible ? revealButton.width + titleRow.spacing : 0)))
+                }
+
+                IconButton {
+                  id: revealButton
+                  visible: root.email !== ""
+                  anchors.verticalCenter: parent.verticalCenter
+                  iconName: root.hideEmail ? "visibility_off" : "visibility"
+                  tooltipText: root.hideEmail ? t("tt_show_email") : t("tt_hide_email")
+                  foreground: root.foreground
+                  iconSize: Style.font.body
+                  onClicked: root.toggleEmail()
+                }
+              }
+
+              Text {
+                id: metaText
+                textFormat: Text.PlainText
+                width: parent.width
+                text: root.statusError !== "" && !root.status ? t("monitor_not_running") : root.metaLabel
+                visible: text !== ""
+                color: Qt.darker(root.foreground, 1.4)
+                font.family: hero.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1.2
+                elide: Text.ElideRight
               }
             }
-            trailingControl: Component {
-              Row {
-                spacing: Style.space(4)
 
-                IconButton {
-                  iconName: "refresh"
-                  tooltipText: t("tt_reload_status")
-                  foreground: root.foreground
-                  iconSize: Style.font.heading
-                  spinOnClick: true
-                  anchors.verticalCenter: parent.verticalCenter
-                  onClicked: root.refresh()
-                }
+            Row {
+              id: heroTrailing
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(4)
 
-                IconButton {
-                  visible: root.loggedIn
-                  iconName: "logout"
-                  tooltipText: t("tt_logout")
-                  foreground: root.foreground
-                  iconSize: Style.font.heading
-                  anchors.verticalCenter: parent.verticalCenter
-                  onClicked: root.runCtl("logout")
-                }
+              IconButton {
+                iconName: "refresh"
+                tooltipText: t("tt_reload_status")
+                foreground: root.foreground
+                iconSize: Style.font.heading
+                spinOnClick: true
+                anchors.verticalCenter: parent.verticalCenter
+                onClicked: root.refresh()
+              }
 
-                ToggleSwitch {
-                  id: pauseSwitch
-                  checked: !root.allPaused
-                  busy: false
-                  hasCursor: false
-                  foreground: Color.accent
-                  accent: Color.accent
-                  anchors.verticalCenter: parent.verticalCenter
-                  onHovered: function(on) {}
-                  onToggled: root.togglePause()
+              IconButton {
+                visible: root.loggedIn
+                iconName: "logout"
+                tooltipText: t("tt_logout")
+                foreground: root.foreground
+                iconSize: Style.font.heading
+                anchors.verticalCenter: parent.verticalCenter
+                onClicked: root.runCtl("logout")
+              }
 
-                  PanelToolTip {
-                    visible: pauseSwitch.containsMouse
-                    text: root.allPaused ? t("tt_resume_all") : t("tt_pause_all")
-                    fontFamily: hero.fontFamily
-                  }
+              ToggleSwitch {
+                id: pauseSwitch
+                checked: !root.allPaused
+                busy: false
+                hasCursor: false
+                foreground: Color.accent
+                accent: Color.accent
+                anchors.verticalCenter: parent.verticalCenter
+                onHovered: function(on) {}
+                onToggled: root.togglePause()
+
+                PanelToolTip {
+                  visible: pauseSwitch.containsMouse
+                  text: root.allPaused ? t("tt_resume_all") : t("tt_pause_all")
+                  fontFamily: hero.fontFamily
                 }
               }
             }

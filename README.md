@@ -45,6 +45,7 @@ Bar Widget (bisma.omaga-sync) ── Quickshell QML Panel      ├─ Storage qu
   - **Remove Sync** button (safe; files on both local and cloud stay intact).
   - **Interactive Remote Folder Picker & Creator**: browse and select existing remote MEGA folders or create new cloud directories straight from the UI.
   - Integrated session management with **Logout** and terminal-assisted **Login** onboarding.
+  - Account address is masked by default and revealed with the **eye button** next to it; the choice is remembered.
   - **Logs tab**: a live list of MEGA sync issues, each row copyable on its own and all at once, with a checkmark confirming the copy. This is the first place to look when a notification says a sync failed.
 - 🏷️ **Nautilus / GNOME Files Sync Emblems:**
   - Corner status badges on synced folders and files via `metadata::emblems` (`emblem-omaga-synced`, `emblem-omaga-syncing`, `emblem-omaga-error`, and `emblem-omaga-transfer`).

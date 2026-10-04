@@ -45,6 +45,7 @@ Bar Widget (bisma.omaga-sync) ── Panel Quickshell QML      ├─ Kuota peny
   - Tombol **Hapus Sinkronisasi** (aman; file di lokal dan cloud tetap utuh).
   - **Picker & Pembuat Folder Cloud Interaktif**: telusuri folder remote MEGA atau buat direktori cloud baru langsung dari antarmuka tanpa terminal.
   - Manajemen sesi terintegrasi dengan tombol **Logout** dan onboarding terminal **Login**.
+  - Alamat akun tersamar secara default dan bisa dibuka lewat tombol **mata** di sebelahnya; pilihan ini diingat.
   - **Tab Logs**: daftar kendala sync MEGA secara live, tiap baris bisa disalin sendiri maupun sekaligus, dengan ikon centang sebagai konfirmasi. Ini tempat pertama yang dicek saat notifikasi bilang sync gagal.
 - 🏷️ **Emblem Status di Nautilus / GNOME Files:**
   - Badge sudut status pada folder dan file via `metadata::emblems` (`emblem-omaga-synced`, `emblem-omaga-syncing`, `emblem-omaga-error`, dan `emblem-omaga-transfer`).
