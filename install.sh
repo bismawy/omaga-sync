@@ -16,10 +16,12 @@ mkdir -p "$PLUGIN_DST" "$HOME/.local/bin" "$UNIT_DST" "$HOME/.local/state/omaga-
   "$HOME/.local/share/nautilus-python/extensions" \
   "$HOME/.local/share/icons/hicolor/scalable/emblems"
 
-# The plugin loader rejects symlinks, so always copy. Recreate the plugin
-# directory first: copying never removes files deleted upstream, so a stale
-# QML or icon would otherwise linger across upgrades.
-rm -rf "$PLUGIN_DST"
+# The plugin loader rejects symlinks, so always copy. Prune only what this
+# installer owns (QML, I18n, icons) so files removed upstream cannot linger,
+# while everything else stays put: a git-managed install keeps its .git, and
+# wiping unrelated tracked files would leave the working tree dirty, which
+# makes `omarchy plugin update` fail when a new version arrives.
+rm -rf "$PLUGIN_DST"/*.qml "$PLUGIN_DST"/I18n.js "$PLUGIN_DST"/icons
 mkdir -p "$PLUGIN_DST/icons"
 install -m 644 "$SRC_DIR/manifest.json" "$PLUGIN_DST/manifest.json"
 install -m 644 "$SRC_DIR/Panel.qml" "$PLUGIN_DST/Panel.qml"

@@ -66,15 +66,26 @@ Bar Widget (bisma.omaga-sync) ── Quickshell QML Panel      ├─ Storage qu
 omarchy pkg aur add megacmd
 ```
 
-### 2. Install Plugin & Services
-Clone the repository and run the installer:
+### 2. Install the Plugin
+Add the plugin through Omarchy so it stays updatable:
+```bash
+omarchy plugin add https://github.com/bismawy/omaga-sync --enable
+```
+
+### 3. Install the Engine & Services
 ```bash
 git clone https://github.com/bismawy/omaga-sync.git
 cd omaga-sync
 ./install.sh
 ```
+The installer provisions the `omaga-sync` engine, the two systemd units, and the Nautilus emblems. It also copies the panel files, so running it alone works too — but the plugin is then **not** git-managed and `omarchy plugin update` will refuse it (`not a git checkout`).
 
-### 3. Log in to MEGA (One-time)
+Updating later:
+```bash
+omarchy plugin update bisma.omaga-sync
+```
+
+### 4. Log in to MEGA (One-time)
 ```bash
 mega-login your-email@example.com
 ```
@@ -102,7 +113,14 @@ The `omaga-sync` utility can be executed directly from terminal or custom script
 
 ## 🔧 Development & Hot Reload
 
-To reload QML / JS changes without restarting daemon services:
+To refresh the panel after editing a QML / JS file, copy just that file and reload plugins:
+```bash
+install -m 644 Panel.qml ~/.config/omarchy/plugins/bisma.omaga-sync/
+omarchy-shell shell rescanPlugins
+```
+If a broken file ever stops the plugin from loading, clear the component cache with `omarchy-restart-shell`.
+
+To copy the whole plugin at once (it prunes stale files but keeps `.git`, so a git-managed install survives):
 ```bash
 ./install.sh --plugin-only
 ```
