@@ -8,7 +8,6 @@ BorderSurface {
   id: root
 
   property string iconName: ""
-  property Component iconComponent: null
   property string tooltipText: ""
   property color foreground: Color.foreground
   property color iconColor: root.enabled ? root.foreground : Qt.darker(root.foreground, 2.0)
@@ -37,15 +36,8 @@ BorderSurface {
     height: root.iconSize
     rotation: 0
 
-    Loader {
-      anchors.centerIn: parent
-      visible: root.iconComponent !== null
-      sourceComponent: root.iconComponent
-    }
-
     MaterialIcon {
       anchors.centerIn: parent
-      visible: root.iconComponent === null
       name: root.iconName
       iconSize: root.iconSize
       color: root.iconColor

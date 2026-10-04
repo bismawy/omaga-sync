@@ -26,6 +26,8 @@ install -m 644 "$SRC_DIR/Panel.qml" "$PLUGIN_DST/Panel.qml"
 install -m 644 "$SRC_DIR/I18n.js" "$PLUGIN_DST/I18n.js"
 install -m 644 "$SRC_DIR/MaterialIcon.qml" "$PLUGIN_DST/MaterialIcon.qml"
 install -m 644 "$SRC_DIR/IconButton.qml" "$PLUGIN_DST/IconButton.qml"
+install -m 644 "$SRC_DIR/PanelNoteText.qml" "$PLUGIN_DST/PanelNoteText.qml"
+install -m 644 "$SRC_DIR/PanelScroll.qml" "$PLUGIN_DST/PanelScroll.qml"
 install -m 644 "$SRC_DIR"/icons/*.svg "$PLUGIN_DST/icons/"
 
 if [[ $plugin_only -eq 1 ]]; then

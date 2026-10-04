@@ -7,7 +7,7 @@ Ditenagai langsung oleh mesin headless [`mega-cmd-server`](https://github.com/me
 [![Platform: Omarchy](https://img.shields.io/badge/Platform-Omarchy%20%2F%20Quickshell-ff5555.svg)](https://github.com/basecamp/omarchy)
 [![Engine: MEGAcmd](https://img.shields.io/badge/Engine-MEGAcmd%20Server-d9272e.svg)](https://github.com/meganz/MEGAcmd)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Version: 1.1.2](https://img.shields.io/badge/Version-1.1.2-teal.svg)](./manifest.json)
+[![Version: 1.1.3](https://img.shields.io/badge/Version-1.1.3-teal.svg)](./manifest.json)
 
 [English](README.md) | [Bahasa Indonesia](README_ID.md)
 
@@ -45,6 +45,7 @@ Bar Widget (bisma.omaga-sync) ── Panel Quickshell QML      ├─ Kuota peny
   - Tombol **Hapus Sinkronisasi** (aman; file di lokal dan cloud tetap utuh).
   - **Picker & Pembuat Folder Cloud Interaktif**: telusuri folder remote MEGA atau buat direktori cloud baru langsung dari antarmuka tanpa terminal.
   - Manajemen sesi terintegrasi dengan tombol **Logout** dan onboarding terminal **Login**.
+  - **Tab Logs**: daftar kendala sync MEGA secara live, tiap baris bisa disalin sendiri maupun sekaligus, dengan ikon centang sebagai konfirmasi. Ini tempat pertama yang dicek saat notifikasi bilang sync gagal.
 - 🏷️ **Emblem Status di Nautilus / GNOME Files:**
   - Badge sudut status pada folder dan file via `metadata::emblems` (`emblem-omaga-synced`, `emblem-omaga-syncing`, `emblem-omaga-error`, dan `emblem-omaga-transfer`).
   - Integrasi performa tinggi in-process `Gio` dengan penulisan berbasis diff, rate-budget chunking, dan pembersihan otomatis saat monitor dihentikan/dihapus.
