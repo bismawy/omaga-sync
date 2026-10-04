@@ -7,7 +7,7 @@ Powered directly by the headless [`mega-cmd-server`](https://github.com/meganz/M
 [![Platform: Omarchy](https://img.shields.io/badge/Platform-Omarchy%20%2F%20Quickshell-ff5555.svg)](https://github.com/basecamp/omarchy)
 [![Engine: MEGAcmd](https://img.shields.io/badge/Engine-MEGAcmd%20Server-d9272e.svg)](https://github.com/meganz/MEGAcmd)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Version: 1.1.2](https://img.shields.io/badge/Version-1.1.2-teal.svg)](./manifest.json)
+[![Version: 1.1.3](https://img.shields.io/badge/Version-1.1.3-teal.svg)](./manifest.json)
 
 [English](README.md) | [Bahasa Indonesia](README_ID.md)
 
@@ -45,6 +45,8 @@ Bar Widget (bisma.omaga-sync) ── Quickshell QML Panel      ├─ Storage qu
   - **Remove Sync** button (safe; files on both local and cloud stay intact).
   - **Interactive Remote Folder Picker & Creator**: browse and select existing remote MEGA folders or create new cloud directories straight from the UI.
   - Integrated session management with **Logout** and terminal-assisted **Login** onboarding.
+  - Account address is masked by default and revealed with the **eye button** next to it; the choice is remembered.
+  - **Logs tab**: a live list of MEGA sync issues, each row copyable on its own and all at once, with a checkmark confirming the copy. This is the first place to look when a notification says a sync failed.
 - 🏷️ **Nautilus / GNOME Files Sync Emblems:**
   - Corner status badges on synced folders and files via `metadata::emblems` (`emblem-omaga-synced`, `emblem-omaga-syncing`, `emblem-omaga-error`, and `emblem-omaga-transfer`).
   - High-performance in-process `Gio` integration with diffed writes, rate-budget chunking, and automatic cleanup on monitor stop/uninstall.
