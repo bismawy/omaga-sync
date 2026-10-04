@@ -66,15 +66,26 @@ Bar Widget (bisma.omaga-sync) ── Panel Quickshell QML      ├─ Kuota peny
 omarchy pkg aur add megacmd
 ```
 
-### 2. Pasang Plugin & Service
-Kloning repositori dan jalankan skrip instalasi:
+### 2. Pasang Plugin
+Tambahkan plugin lewat Omarchy agar tetap bisa diperbarui:
+```bash
+omarchy plugin add https://github.com/bismawy/omaga-sync --enable
+```
+
+### 3. Pasang Engine & Service
 ```bash
 git clone https://github.com/bismawy/omaga-sync.git
 cd omaga-sync
 ./install.sh
 ```
+Skrip ini menyiapkan engine `omaga-sync`, dua unit systemd, dan emblem Nautilus. Skrip juga menyalin file panel, jadi menjalankannya saja tetap cukup — tetapi plugin lalu **bukan** git-managed dan `omarchy plugin update` akan menolaknya (`not a git checkout`).
 
-### 3. Login Akun MEGA (Sekali Saja)
+Memperbarui di kemudian hari:
+```bash
+omarchy plugin update bisma.omaga-sync
+```
+
+### 4. Login Akun MEGA (Sekali Saja)
 ```bash
 mega-login email-anda@example.com
 ```
@@ -102,7 +113,14 @@ Utilitas `omaga-sync` dapat dipanggil langsung dari terminal untuk otomatisasi m
 
 ## 🔧 Pengembangan & Hot Reload
 
-Untuk memperbarui file QML / JS tanpa me-restart service daemon:
+Untuk memperbarui panel setelah mengedit satu file QML / JS, salin file itu saja lalu muat ulang plugin:
+```bash
+install -m 644 Panel.qml ~/.config/omarchy/plugins/bisma.omaga-sync/
+omarchy-shell shell rescanPlugins
+```
+Jika ada file rusak sampai plugin gagal dimuat, bersihkan cache komponen dengan `omarchy-restart-shell`.
+
+Untuk menyalin seluruh plugin sekaligus (file basi dibersihkan, tetapi `.git` dipertahankan sehingga pemasangan git-managed tidak rusak):
 ```bash
 ./install.sh --plugin-only
 ```
