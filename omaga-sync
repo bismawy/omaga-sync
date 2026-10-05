@@ -42,8 +42,8 @@ from pathlib import Path
 try:
     import gi
     gi.require_version("Gio", "2.0")
-    from gi.repository import Gio as _Gio
-except Exception:  # python-gobject absent — fall back to the `gio` CLI
+    from gi.repository import Gio as _Gio, GLib as _GLib
+except Exception:  # python-gobject absent — no D-Bus notify, no emblems
     _Gio = None
 
 STATE_DIR = Path.home() / ".local/state/omaga-sync"
@@ -285,10 +285,26 @@ def parse_pairs(out):
 
 
 def notify(summary, body=""):
-    args = ["notify-send", "-a", "Omaga Sync", "-t", "6000", summary]
-    if body:
-        args.append(body)
-    sh(args, timeout=4)
+    """Send a desktop notification over the session bus.
+
+    The body can name a private synced file, so it must never reach a child
+    process argv: `notify-send <summary> <body>` is world-readable through
+    /proc/<pid>/cmdline while it runs, and this fires automatically.
+    """
+    if _Gio is None:
+        return
+    try:
+        bus = _Gio.bus_get_sync(_Gio.BusType.SESSION, None)
+        bus.call_sync(
+            "org.freedesktop.Notifications",
+            "/org/freedesktop/Notifications",
+            "org.freedesktop.Notifications",
+            "Notify",
+            _GLib.Variant("(susssasa{sv}i)",
+                          ("Omaga Sync", 0, "", summary, body, [], {}, 6000)),
+            None, _Gio.DBusCallFlags.NONE, 4000, None)
+    except Exception:
+        pass  # notification server absent — a missed toast is not fatal
 
 
 # -- transfer history -------------------------------------------------------
@@ -388,46 +404,38 @@ class Monitor:
     def set_emblem_if_ours(self, path, emblem):
         """Like set_emblem, but only touches paths whose current emblem is
         one of ours (never clobber unrelated user emblems)."""
+        if _Gio is None:
+            return False
         try:
-            f = _Gio.File.new_for_path(path) if _Gio is not None else None
+            f = _Gio.File.new_for_path(path)
+            info = f.query_info("metadata::emblems",
+                                _Gio.FileQueryInfoFlags.NONE, None)
+            cur = info.get_attribute_stringv("metadata::emblems") or []
+            ours = [e for e in cur if e.startswith("emblem-omaga-")]
+            if not ours:
+                return False
+            if emblem is not None:
+                return self.set_emblem(path, emblem)
+            # clear only our names, keep any foreign emblems
+            keep = [e for e in cur if not e.startswith("emblem-omaga-")]
+            if keep:
+                return self.set_emblem_stringv(path, keep)
+            return self.set_emblem(path, None)
         except Exception:
             return False
-        if f is not None:
-            try:
-                info = f.query_info("metadata::emblems",
-                                    _Gio.FileQueryInfoFlags.NONE, None)
-                cur = info.get_attribute_stringv("metadata::emblems") or []
-                ours = [e for e in cur if e.startswith("emblem-omaga-")]
-                if not ours:
-                    return False
-                if emblem is not None:
-                    return self.set_emblem(path, emblem)
-                # clear only our names, keep any foreign emblems
-                keep = [e for e in cur if not e.startswith("emblem-omaga-")]
-                if keep:
-                    return self.set_emblem_stringv(path, keep)
-                return self.set_emblem(path, None)
-            except Exception:
-                return False
-        # gio fallback
-        rc, out, _ = sh(["gio", "info", path], timeout=5)
-        if rc != 0 or "emblem-omaga-" not in out:
-            return False
-        return self.set_emblem(path, None)
 
     @staticmethod
     def set_emblem_stringv(path, emblems):
+        if _Gio is None:
+            return False
         try:
-            if _Gio is not None:
-                info = _Gio.FileInfo.new()
-                info.set_attribute_stringv("metadata::emblems", emblems)
-                res = _Gio.File.new_for_path(path).set_attributes_from_info(
-                    info, _Gio.FileQueryInfoFlags.NONE, None)
-                return bool(res[0] if isinstance(res, tuple) else res)
+            info = _Gio.FileInfo.new()
+            info.set_attribute_stringv("metadata::emblems", emblems)
+            res = _Gio.File.new_for_path(path).set_attributes_from_info(
+                info, _Gio.FileQueryInfoFlags.NONE, None)
+            return bool(res[0] if isinstance(res, tuple) else res)
         except Exception:
             return False
-        cmd = ["gio", "set", "-t", "stringv", path, "metadata::emblems"] + emblems
-        return sh(cmd, timeout=5)[0] == 0
 
     def sync_emblems(self, status):
         """Mirror sync states onto folder and file icons in GNOME Files.
@@ -460,26 +468,27 @@ class Monitor:
     def set_emblem(path, emblem):
         """Set (or clear, emblem=None) metadata::emblems on one path.
         Returns False when the path vanished mid-tick (normal — files get
-        deleted while we walk); callers just retry or drop it next tick."""
+        deleted while we walk); callers just retry or drop it next tick.
+
+        Emblems are written in-process only. A `gio set <path>` fallback
+        would put the private synced path in a child's argv, readable via
+        /proc/<pid>/cmdline; python-gobject is already required, so there
+        is nothing to fall back to."""
+        if _Gio is None:
+            return False
         try:
-            if _Gio is not None:
-                f = _Gio.File.new_for_path(path)
-                if emblem is None:
-                    return bool(f.set_attribute(
-                        "metadata::emblems", _Gio.FileAttributeType.INVALID, None,
-                        _Gio.FileQueryInfoFlags.NONE, None))
-                info = _Gio.FileInfo.new()
-                info.set_attribute_stringv("metadata::emblems", [emblem])
-                res = f.set_attributes_from_info(
-                    info, _Gio.FileQueryInfoFlags.NONE, None)
-                return bool(res[0] if isinstance(res, tuple) else res)
+            f = _Gio.File.new_for_path(path)
+            if emblem is None:
+                return bool(f.set_attribute(
+                    "metadata::emblems", _Gio.FileAttributeType.INVALID, None,
+                    _Gio.FileQueryInfoFlags.NONE, None))
+            info = _Gio.FileInfo.new()
+            info.set_attribute_stringv("metadata::emblems", [emblem])
+            res = f.set_attributes_from_info(
+                info, _Gio.FileQueryInfoFlags.NONE, None)
+            return bool(res[0] if isinstance(res, tuple) else res)
         except Exception:
             return False
-        cmd = ["gio", "set", "-t", "unset" if emblem is None else "stringv",
-               path, "metadata::emblems"]
-        if emblem is not None:
-            cmd.append(emblem)
-        return sh(cmd, timeout=5)[0] == 0
 
     def refresh_emblem_walk(self, roots):
         paths = set()
