@@ -186,11 +186,14 @@ Panel {
     return [issue.path || issue.parent || "", issue.reason || "", issue.id || ""].join("  ·  ")
   }
 
+  // Set the clipboard in-process. The old path routed the text through
+  // `bash -c` (the panel copy idiom), which put MEGA paths and issue reasons
+  // in the child process argv, readable by any local user via
+  // /proc/<pid>/cmdline. The QML clipboard binding writes straight to the
+  // Wayland selection and spawns no child at all.
   function copyLog(text, key) {
     if (!text) return
-    // Omarchy's own copy path: shellQuote keeps the text from being re-parsed
-    // by bash, so quotes/backticks in a MEGA reason stay literal.
-    Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(text) + " | wl-copy"])
+    Quickshell.clipboardText = String(text)
     copyFlashKey = String(key)
     copyFlashTimer.restart()
   }
