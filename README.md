@@ -26,7 +26,7 @@ mega-cmd-server ── systemd (omaga-sync-engine.service)     Headless MEGAcmd 
       │ Local UNIX socket
 omaga-sync monitor ── systemd (omaga-sync-monitor.service) 5s poll → status.json (bounded reader)
       ├── GNOME Files / Nautilus Integrator                └─ In-process Gio metadata::emblems
-      └── Desktop Notification Dispatcher                  └─ notify-send on errors/issues
+      └── Desktop Notification Dispatcher                  └─ in-process D-Bus Notify on errors/issues
 Bar Widget (bisma.omaga-sync) ── Quickshell QML Panel      ├─ Storage quota, transfer progress
                                                            ├─ Pause / Resume / Add / Remove pairs
                                                            └─ Interactive cloud folder picker & creator
@@ -61,10 +61,11 @@ Bar Widget (bisma.omaga-sync) ── Quickshell QML Panel      ├─ Storage qu
 
 ## 📦 Installation & Setup
 
-### 1. Prerequisite: Install MEGAcmd
+### 1. Prerequisites: MEGAcmd and python-gobject
 ```bash
 omarchy pkg aur add megacmd
 ```
+python-gobject (`Gio`) backs sync-status emblems and desktop notifications in-process. Without it the monitor still syncs and the panel still works; emblems and notifications are skipped.
 
 ### 2. Install the Plugin
 Add the plugin through Omarchy so it stays updatable:

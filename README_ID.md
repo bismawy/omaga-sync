@@ -26,7 +26,7 @@ mega-cmd-server ── systemd (omaga-sync-engine.service)     Daemon sinkronisa
       │ Socket UNIX lokal
 omaga-sync monitor ── systemd (omaga-sync-monitor.service) Polling 5s → status.json (bounded reader)
       ├── Integrator GNOME Files / Nautilus                └─ In-process Gio metadata::emblems
-      └── Dispatcher Notifikasi Desktop                    └─ notify-send saat error/kendala
+      └── Dispatcher Notifikasi Desktop                    └─ D-Bus Notify in-process saat error/kendala
 Bar Widget (bisma.omaga-sync) ── Panel Quickshell QML      ├─ Kuota penyimpanan, progres transfer
                                                            ├─ Jeda / Lanjut / Tambah / Hapus pair
                                                            └─ Picker & pembuat folder cloud interaktif
@@ -61,10 +61,11 @@ Bar Widget (bisma.omaga-sync) ── Panel Quickshell QML      ├─ Kuota peny
 
 ## 📦 Instalasi & Pengaturan
 
-### 1. Prasyarat: Pasang MEGAcmd
+### 1. Prasyarat: MEGAcmd dan python-gobject
 ```bash
 omarchy pkg aur add megacmd
 ```
+python-gobject (`Gio`) menopang emblem status sync dan notifikasi desktop secara in-process. Tanpanya monitor tetap menyinkronkan dan panel tetap jalan; emblem dan notifikasi dilewati.
 
 ### 2. Pasang Plugin
 Tambahkan plugin lewat Omarchy agar tetap bisa diperbarui:
