@@ -713,8 +713,13 @@ class Monitor:
             notify("MEGA Sync: mesin tidak menyala",
                    "Periksa: journalctl --user -u omaga-sync-engine")
         else:
-            detail = status.get("message") or "lihat panel untuk detail"
-            notify("MEGA Sync: sinkronisasi bermasalah", detail)
+            # Deliberately generic. The notification body would otherwise carry
+            # sync-issue paths, and Omarchy's notification service serializes it
+            # into a `bash -c` argv (Service.qml persistPopupFile), readable via
+            # /proc/<pid>/cmdline. The paths stay in status.json and the Logs
+            # tab, where the user opens them on purpose.
+            notify("MEGA Sync: sinkronisasi bermasalah",
+                   "Buka panel Omaga Sync untuk detail.")
 
     # -- status file ---------------------------------------------------------
     def write_status(self, partial):
