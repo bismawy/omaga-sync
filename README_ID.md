@@ -7,7 +7,7 @@ Ditenagai langsung oleh mesin headless [`mega-cmd-server`](https://github.com/me
 [![Platform: Omarchy](https://img.shields.io/badge/Platform-Omarchy%20%2F%20Quickshell-ff5555.svg)](https://github.com/basecamp/omarchy)
 [![Engine: MEGAcmd](https://img.shields.io/badge/Engine-MEGAcmd%20Server-d9272e.svg)](https://github.com/meganz/MEGAcmd)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Version: 1.1.4](https://img.shields.io/badge/Version-1.1.4-teal.svg)](./manifest.json)
+[![Version: 1.1.4](https://img.shields.io/badge/Version-1.1.5-teal.svg)](./manifest.json)
 
 [English](README.md) | [Bahasa Indonesia](README_ID.md)
 
