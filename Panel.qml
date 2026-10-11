@@ -26,6 +26,14 @@ Panel {
   property var status: null
   property string statusError: ""
   property bool addMode: false
+
+  // Every text field is read-only unless it has focus. Qt connects each live
+  // QQuickTextInput to QClipboard::dataChanged and q_canPasteChanged() reads
+  // the clipboard synchronously on every change unless the input is
+  // read-only; on Wayland that read waits on the owner's pipe, so a
+  // clipboard owner that stops answering would stall the shared shell. The
+  // fields below stay in the tree for the whole session, so they must be
+  // inert while the user is not typing in them.
   property string activeTab: "syncs"
   property var history: []
   property string historyError: ""
@@ -652,6 +660,7 @@ Panel {
               TextField {
                 id: emailField
                 Layout.fillWidth: true
+                readOnly: !activeFocus
                 placeholderText: t("email_placeholder")
                 color: root.foreground
                 font.family: root.fontFamily
@@ -1210,6 +1219,7 @@ Panel {
 
               TextField {
                 id: localBaseField
+                readOnly: !activeFocus
                 Layout.fillWidth: true
                 text: "MEGA"
                 color: root.foreground
@@ -1350,6 +1360,7 @@ Panel {
 
               TextField {
                 id: newRemoteField
+                readOnly: !activeFocus
                 Layout.fillWidth: true
                 placeholderText: t("new_remote_placeholder")
                 color: root.foreground

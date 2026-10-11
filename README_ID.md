@@ -112,6 +112,27 @@ Utilitas `omaga-sync` dapat dipanggil langsung dari terminal untuk otomatisasi m
 
 ---
 
+## 🛡️ Pemilik Clipboard yang Macet
+
+Setiap `TextField` / `TextInput` yang hidup di panel adalah bahaya untuk seluruh
+shell desktop, jadi panel memegang aturan ini:
+
+> **Sebuah kolom teks harus read-only kecuali sedang punya active focus, dan
+> tidak boleh ada di luar form yang memakainya.**
+
+Qt menyambungkan setiap `QQuickTextInput` yang hidup ke `QClipboard::dataChanged`
+dan `q_canPasteChanged()`-nya membaca clipboard secara **sinkron** kecuali input
+tersebut read-only — di Wayland pembacaan itu menunggu pipa milik pemilik
+seleksi. Panel berjalan di dalam proses Quickshell bersama, jadi pemilik yang
+berhenti menjawab (kasus pemilik macet di
+[basecamp/omarchy#8753](https://github.com/basecamp/omarchy/issues/8753))
+membekukan bar dan semua panel lain bersamanya, bukan hanya panel ini.
+
+Tiga kolom di `Panel.qml` (email login, folder dasar lokal, folder remote baru)
+karena itu semuanya memakai `readOnly: !activeFocus`. Pertahankan baris itu saat
+mengeditnya, dan jangan menambah kolom teks yang tetap ada di tree saat form-nya
+tertutup.
+
 ## 🔧 Pengembangan & Hot Reload
 
 Untuk memperbarui panel setelah mengedit satu file QML / JS, salin file itu saja lalu muat ulang plugin:

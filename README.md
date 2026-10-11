@@ -112,6 +112,26 @@ The `omaga-sync` utility can be executed directly from terminal or custom script
 
 ---
 
+## 🛡️ Stalled Clipboard Owners
+
+Every live `TextField` / `TextInput` in the panel is a hazard for the whole
+desktop shell, so the panel keeps this rule:
+
+> **A text field must be read-only unless it has active focus, and must not
+> exist outside the form that uses it.**
+
+Qt connects each live `QQuickTextInput` to `QClipboard::dataChanged` and its
+`q_canPasteChanged()` reads the clipboard **synchronously** unless the input is
+read-only — on Wayland that read waits on the selection owner's pipe. A panel
+runs inside the shared Quickshell process, so an owner that stops answering
+(the stalled-owner case in [basecamp/omarchy#8753](https://github.com/basecamp/omarchy/issues/8753))
+freezes the bar and every other panel with it, not just this one.
+
+The three fields in `Panel.qml` (login email, local base folder, new remote
+folder) therefore all carry `readOnly: !activeFocus`. Keep that line when
+editing them, and do not add a text field that lives in the tree while its form
+is closed.
+
 ## 🔧 Development & Hot Reload
 
 To refresh the panel after editing a QML / JS file, copy just that file and reload plugins:
