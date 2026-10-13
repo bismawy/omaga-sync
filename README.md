@@ -112,6 +112,33 @@ The `omaga-sync` utility can be executed directly from terminal or custom script
 
 ---
 
+## 🛡️ Stalled Clipboard Owners
+
+A panel shares the Quickshell process with the bar and every other panel, so a
+blocking clipboard read in one widget freezes all of them. Two Qt paths block,
+and the panel avoids both:
+
+| Path | What it does | Used here? |
+| :--- | :--- | :--- |
+| `QQuickTextInput` (a `TextField`) | On every `QClipboard::dataChanged` it calls `QMimeData::text()` — downloads the whole selection. On Wayland that is `QWaylandMimeData::readData()`, a loop with a per-chunk timeout and **no total byte or time bound**. | No |
+| `QQuickTextControl` (a `TextEdit`) | Its check only asks `hasText()` / `hasFormat()`, which `QWaylandMimeData::hasFormat_sys()` answers from the offer's cached MIME list. No payload, no owner contact. | Yes |
+
+`PanelField.qml` is the panel's single text input, built on `TextEdit` for that
+reason. Its automatic paths — `dataChanged`, `canPaste`, and the read triggered
+by a `readOnly` change — are all format-only.
+
+Two payload paths stay, both user-initiated, and the component closes them:
+
+- **`Ctrl+V` / `Ctrl+X` / `Shift+Insert`** are consumed by a `Keys.priority:
+  BeforeItem` handler before TextEdit's own shortcut handling runs.
+- **Middle click**, which TextEdit binds to the general-selection paste, is
+  taken by an overlay that accepts only that button.
+
+So text enters the field only by typing, and no automatic or accidental path
+reaches the unbounded read. Keep this property when editing: a new text input
+must be a `PanelField`, never a `TextField`, and it must keep the guard.
+
+## 🔧 Development & Hot Reload
 ## 🔧 Development & Hot Reload
 
 To refresh the panel after editing a QML / JS file, copy just that file and reload plugins:
