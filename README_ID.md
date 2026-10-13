@@ -114,25 +114,33 @@ Utilitas `omaga-sync` dapat dipanggil langsung dari terminal untuk otomatisasi m
 
 ## 🛡️ Pemilik Clipboard yang Macet
 
-Setiap `TextField` / `TextInput` yang hidup di panel adalah bahaya untuk seluruh
-shell desktop, jadi panel memegang aturan ini:
+Panel berbagi proses Quickshell dengan bar dan panel lain, jadi satu pembacaan
+clipboard yang memblokir akan membekukan semuanya. Ada dua jalur Qt yang
+memblokir, dan panel menghindari keduanya:
 
-> **Sebuah kolom teks harus read-only kecuali sedang punya active focus, dan
-> tidak boleh ada di luar form yang memakainya.**
+| Jalur | Perilakunya | Dipakai di sini? |
+| :--- | :--- | :--- |
+| `QQuickTextInput` (sebuah `TextField`) | Setiap `QClipboard::dataChanged` memanggil `QMimeData::text()` — mengunduh seluruh isi seleksi. Di Wayland itu `QWaylandMimeData::readData()`, loop dengan timeout per potong dan **tanpa batas total byte maupun waktu**. | Tidak |
+| `QQuickTextControl` (sebuah `TextEdit`) | Pengecekannya hanya bertanya `hasText()` / `hasFormat()`, yang dijawab `QWaylandMimeData::hasFormat_sys()` dari daftar MIME yang sudah di-cache pada offer. Tanpa payload, tanpa menyentuh pemilik seleksi. | Ya |
 
-Qt menyambungkan setiap `QQuickTextInput` yang hidup ke `QClipboard::dataChanged`
-dan `q_canPasteChanged()`-nya membaca clipboard secara **sinkron** kecuali input
-tersebut read-only — di Wayland pembacaan itu menunggu pipa milik pemilik
-seleksi. Panel berjalan di dalam proses Quickshell bersama, jadi pemilik yang
-berhenti menjawab (kasus pemilik macet di
-[basecamp/omarchy#8753](https://github.com/basecamp/omarchy/issues/8753))
-membekukan bar dan semua panel lain bersamanya, bukan hanya panel ini.
+`PanelField.qml` adalah satu-satunya input teks panel, dibangun di atas
+`TextEdit` karena alasan itu. Semua jalur otomatisnya — `dataChanged`,
+`canPaste`, dan pembacaan yang dipicu perubahan `readOnly` — hanya membaca
+format.
 
-Tiga kolom di `Panel.qml` (email login, folder dasar lokal, folder remote baru)
-karena itu semuanya memakai `readOnly: !activeFocus`. Pertahankan baris itu saat
-mengeditnya, dan jangan menambah kolom teks yang tetap ada di tree saat form-nya
-tertutup.
+Dua jalur payload masih ada, keduanya atas gestur user, dan komponen menutupnya:
 
+- **`Ctrl+V` / `Ctrl+X` / `Shift+Insert`** dikonsumsi oleh handler `Keys.priority:
+  BeforeItem` sebelum penanganan shortcut milik TextEdit berjalan.
+- **Klik tengah**, yang oleh TextEdit dipakai untuk paste seleksi umum, diambil
+  alih overlay yang hanya menerima tombol itu.
+
+Jadi teks hanya masuk lewat pengetikan, dan tidak ada jalur otomatis maupun
+tidak sengaja yang mencapai pembacaan tak berbatas itu. Pertahankan sifat ini
+saat mengedit: input teks baru harus `PanelField`, bukan `TextField`, dan
+harus memakai penjaganya.
+
+## 🔧 Pengembangan & Hot Reload
 ## 🔧 Pengembangan & Hot Reload
 
 Untuk memperbarui panel setelah mengedit satu file QML / JS, salin file itu saja lalu muat ulang plugin:

@@ -27,13 +27,12 @@ Panel {
   property string statusError: ""
   property bool addMode: false
 
-  // Every text field is read-only unless it has focus. Qt connects each live
-  // QQuickTextInput to QClipboard::dataChanged and q_canPasteChanged() reads
-  // the clipboard synchronously on every change unless the input is
-  // read-only; on Wayland that read waits on the owner's pipe, so a
-  // clipboard owner that stops answering would stall the shared shell. The
-  // fields below stay in the tree for the whole session, so they must be
-  // inert while the user is not typing in them.
+  // Text inputs use PanelField, which is built on TextEdit: its automatic
+  // clipboard checks only ask for MIME formats, which Wayland answers from the
+  // cached offer, so no payload is fetched. A TextField would instead download
+  // the selection on every clipboard change, through a read with no total byte
+  // or time bound, and a stalled owner would block the shared shell. Do not
+  // reintroduce a TextField here; see PanelField.qml for the full reasoning.
   property string activeTab: "syncs"
   property var history: []
   property string historyError: ""
@@ -657,21 +656,14 @@ Panel {
               width: parent.width
               spacing: Style.space(8)
 
-              TextField {
+              PanelField {
                 id: emailField
                 Layout.fillWidth: true
-                readOnly: !activeFocus
                 placeholderText: t("email_placeholder")
-                color: root.foreground
-                font.family: root.fontFamily
-                inputMethodHints: Qt.ImhEmailCharactersOnly
+                foreground: root.foreground
+                font.pixelSize: Style.font.caption
                 onAccepted: root.runCtl("login", text)
-                Keys.onPressed: function(event) {
-                  if (event.key === Qt.Key_Escape) {
-                    keyCatcher.forceActiveFocus()
-                    event.accepted = true
-                  }
-                }
+                onEscapePressed: keyCatcher.forceActiveFocus()
                 onActiveFocusChanged: if (!activeFocus) keyCatcher.forceActiveFocus()
               }
             }
@@ -1217,19 +1209,12 @@ Panel {
                 Layout.alignment: Qt.AlignVCenter
               }
 
-              TextField {
+              PanelField {
                 id: localBaseField
-                readOnly: !activeFocus
                 Layout.fillWidth: true
                 text: "MEGA"
-                color: root.foreground
-                font.family: root.fontFamily
-                Keys.onPressed: function(event) {
-                  if (event.key === Qt.Key_Escape) {
-                    keyCatcher.forceActiveFocus()
-                    event.accepted = true
-                  }
-                }
+                foreground: root.foreground
+                onEscapePressed: keyCatcher.forceActiveFocus()
                 onActiveFocusChanged: if (!activeFocus) keyCatcher.forceActiveFocus()
               }
 
@@ -1358,13 +1343,11 @@ Panel {
                 Layout.alignment: Qt.AlignVCenter
               }
 
-              TextField {
+              PanelField {
                 id: newRemoteField
-                readOnly: !activeFocus
                 Layout.fillWidth: true
                 placeholderText: t("new_remote_placeholder")
-                color: root.foreground
-                font.family: root.fontFamily
+                foreground: root.foreground
                 onAccepted: {
                   if (text.trim() !== "") {
                     root.runCtlArgs(["add", text.trim(), localBaseField.text])
@@ -1372,12 +1355,7 @@ Panel {
                     root.addMode = false
                   }
                 }
-                Keys.onPressed: function(event) {
-                  if (event.key === Qt.Key_Escape) {
-                    keyCatcher.forceActiveFocus()
-                    event.accepted = true
-                  }
-                }
+                onEscapePressed: keyCatcher.forceActiveFocus()
                 onActiveFocusChanged: if (!activeFocus) keyCatcher.forceActiveFocus()
               }
 
